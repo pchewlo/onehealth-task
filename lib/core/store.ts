@@ -30,9 +30,14 @@ import type {
  */
 
 export interface MutableState {
+  /** Bumped by reset(). A higher epoch wins wholesale — a wipe cannot be
+   * resurrected by another instance merging its old memory back in. */
+  epoch: number;
   tickets: Ticket[];
   notifications: TicketNotification[];
   comments: TicketComment[];
+  /** Tombstones so a retired learned rule stays retired across merges. */
+  retiredRuleIds: string[];
   audit: AuditEntry[];
   events: MetricEvent[];
   learnedRules: LearnedRule[];
@@ -44,7 +49,7 @@ const g = globalThis as unknown as { __ohState?: MutableState };
 
 function state(): MutableState {
   if (!g.__ohState) {
-    g.__ohState = { tickets: [], notifications: [], comments: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
+    g.__ohState = { epoch: 0, tickets: [], notifications: [], comments: [], audit: [], events: [], learnedRules: [], retiredRuleIds: [], seq: 0, backfilled: false };
   }
   return g.__ohState;
 }
@@ -59,42 +64,108 @@ function state(): MutableState {
  */
 
 let lastSyncAt = 0;
-let hydration: Promise<void> | null = null;
+let inflight: Promise<void> | null = null;
+
+function normalize(s: MutableState): MutableState {
+  s.epoch ??= 0;
+  s.notifications ??= [];
+  s.comments ??= [];
+  s.retiredRuleIds ??= [];
+  for (const t of s.tickets ?? []) {
+    if ((t.status as string) === "open" || !t.status) t.status = "todo";
+    t.updatedAt ??= t.createdAt;
+  }
+  return s;
+}
+
+function unionById<T extends { id: string }>(a: T[], b: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const x of a) byId.set(x.id, x);
+  for (const x of b) if (!byId.has(x.id)) byId.set(x.id, x);
+  return [...byId.values()];
+}
 
 /**
- * Freshness-aware hydration. Serverless runs many warm instances, each with
- * its own memory; a cold-only hydrate leaves warm instances serving stale
- * state forever, and the UI visibly bounces between instances' private
- * worlds. So: every request re-reads the shared snapshot (one small row,
- * throttled to once a second) and adopts it whenever it is strictly NEWER
- * than local memory — the mutation counter `seq` is the clock. An instance
- * that just wrote has the higher seq and keeps its memory; everyone else
- * converges to it on their next request.
+ * Convergent merge of two divergent snapshots. Semantics per collection:
+ *  - tickets: by id, newer updatedAt wins (moves are never rolled back)
+ *  - audit / events / comments / notifications / learnedRules: append-only →
+ *    union by id
+ *  - retiredRuleIds: union — a retirement survives any merge, and
+ *    learnedRules are filtered through it
+ *  - epoch: a strictly higher epoch wins WHOLESALE (that side is a reset)
+ * Merging is idempotent and commutative, which is what makes repeated
+ * cross-instance syncs converge instead of ping-pong.
  */
-export async function ensureHydrated(): Promise<void> {
-  const now = Date.now();
-  if (now - lastSyncAt < 1000) return;
-  hydration ??= loadState()
-    .then((loaded) => {
-      if (loaded) {
-        // Normalise snapshots written by older code versions.
-        for (const t of loaded.tickets ?? []) {
-          if ((t.status as string) === "open" || !t.status) t.status = "todo";
-          t.updatedAt ??= t.createdAt;
-        }
-        loaded.notifications ??= [];
-        loaded.comments ??= [];
-        if (!g.__ohState || loaded.seq > g.__ohState.seq) g.__ohState = loaded;
-      }
-      lastSyncAt = Date.now();
-    })
-    .finally(() => {
-      hydration = null;
-    });
-  await hydration;
+function mergeStates(local: MutableState, remote: MutableState): MutableState {
+  if (remote.epoch > local.epoch) return remote;
+  if (local.epoch > remote.epoch) return local;
+
+  const tickets = new Map<string, Ticket>();
+  for (const t of remote.tickets) tickets.set(t.id, t);
+  for (const t of local.tickets) {
+    const other = tickets.get(t.id);
+    if (!other || (t.updatedAt ?? "") >= (other.updatedAt ?? "")) tickets.set(t.id, t);
+  }
+
+  const retiredRuleIds = [...new Set([...local.retiredRuleIds, ...remote.retiredRuleIds])];
+
+  const merged: MutableState = {
+    epoch: local.epoch,
+    tickets: [...tickets.values()],
+    notifications: unionById(local.notifications, remote.notifications)
+      .sort((a, b) => b.ts.localeCompare(a.ts))
+      .slice(0, 100),
+    comments: unionById(local.comments, remote.comments).sort((a, b) => a.ts.localeCompare(b.ts)),
+    audit: unionById(local.audit, remote.audit)
+      .sort((a, b) => (a.ts === b.ts ? b.id.localeCompare(a.id) : b.ts.localeCompare(a.ts)))
+      .slice(0, 500),
+    events: unionById(local.events, remote.events).sort((a, b) => a.ts.localeCompare(b.ts)),
+    learnedRules: unionById(local.learnedRules, remote.learnedRules).filter(
+      (r) => !retiredRuleIds.includes(r.id),
+    ),
+    retiredRuleIds,
+    seq: Math.max(local.seq, remote.seq),
+    backfilled: local.backfilled || remote.backfilled,
+  };
+  return merged;
+}
+
+async function syncWithRemote(): Promise<void> {
+  const loaded = await loadState();
+  if (loaded) {
+    const remote = normalize(loaded);
+    g.__ohState = g.__ohState ? mergeStates(state(), remote) : remote;
+  }
+  lastSyncAt = Date.now();
+}
+
+/**
+ * Freshness. Reads may ride a 1s throttle (merge makes staleness harmless —
+ * it can only briefly show less, never roll anything back). WRITE PATHS MUST
+ * PASS {force:true}: mutating on a stale base and then persisting is how a
+ * lagging instance erases another's work.
+ */
+export async function ensureHydrated(opts?: { force?: boolean }): Promise<void> {
+  if (!opts?.force && Date.now() - lastSyncAt < 1000) return;
+  inflight ??= syncWithRemote().finally(() => {
+    inflight = null;
+  });
+  await inflight;
 }
 
 export async function persistNow(): Promise<void> {
+  // Read-merge-write: never blind-overwrite the shared snapshot. If the
+  // remote carries a higher epoch (someone reset while we worked), our local
+  // state is obsolete — adopt theirs and save nothing.
+  const loaded = await loadState();
+  if (loaded) {
+    const remote = normalize(loaded);
+    if (remote.epoch > state().epoch) {
+      g.__ohState = remote;
+      return;
+    }
+    g.__ohState = mergeStates(state(), remote);
+  }
   await saveState(state());
 }
 
@@ -276,6 +347,7 @@ export function learnedRules(): LearnedRule[] {
 export function retireLearnedRule(id: string): void {
   const s = state();
   s.learnedRules = s.learnedRules.filter((r) => r.id !== id);
+  if (!s.retiredRuleIds.includes(id)) s.retiredRuleIds.push(id);
 }
 
 /* ---------------- Audit ---------------- */
@@ -328,12 +400,14 @@ export function isBackfilled(): boolean {
 /** Restore a clean demo state. Reference data is immutable so nothing to reload. */
 export function reset(): void {
   const s = state();
+  s.epoch += 1; // outranks every other instance's memory of the old world
   s.tickets = [];
   s.notifications = [];
   s.comments = [];
   s.audit = [];
   s.events = [];
   s.learnedRules = [];
+  s.retiredRuleIds = [];
   s.seq = 0;
   s.backfilled = false;
 }

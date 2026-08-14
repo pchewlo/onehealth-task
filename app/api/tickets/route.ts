@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
  * correction is allowed to teach is decided by policy in correctTicket():
  * learning fills the fallthrough gap; hand-rule territory only records. */
 export async function POST(req: NextRequest) {
-  await ensureHydrated();
+  await ensureHydrated({ force: true });
   const body = (await req.json()) as {
     principalId?: string;
     ticketId?: string;

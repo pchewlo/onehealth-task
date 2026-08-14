@@ -4,7 +4,7 @@ import type { UnresolvedReason } from "@/lib/core/types";
 
 /** Feedback (👍/👎) and conversation_end events from the UI. */
 export async function POST(req: NextRequest) {
-  await ensureHydrated();
+  await ensureHydrated({ force: true });
   const body = (await req.json()) as {
     type?: "feedback" | "conversation_end";
     principalId?: string;

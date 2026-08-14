@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         { status: 503 },
       );
     }
-    await ensureHydrated();
+    await ensureHydrated({ force: true });
     const result = await runAgent({
       principalId: body.principalId,
       messages: body.messages,

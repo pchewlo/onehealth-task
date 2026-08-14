@@ -185,8 +185,10 @@ export function Chat({
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+    // min-h-0 at every level: without it a long thread grows this column past
+    // the viewport and pushes the composer off-screen instead of scrolling.
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto flex max-w-[720px] flex-col gap-4">
           {messages.length === 0 && (
             <div className="mt-14 text-center">

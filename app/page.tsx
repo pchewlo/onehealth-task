@@ -419,7 +419,7 @@ export default function Home() {
         resetting={resetting}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-5 border-b border-[var(--line)] bg-white/70 px-6 py-3">
           <div>
             <h1 className="text-[14px] font-semibold leading-tight">Governed Agent Layer</h1>

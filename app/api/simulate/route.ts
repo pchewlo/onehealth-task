@@ -38,7 +38,7 @@ export async function POST() {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 503 });
   }
 
-  await ensureHydrated();
+  await ensureHydrated({ force: true });
   const results: SimResult[] = [];
 
   for (const f of fixtures as Fixture[]) {
