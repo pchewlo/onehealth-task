@@ -107,7 +107,14 @@ export default function Home() {
       if (tks) {
         setTickets((prev) => {
           const byId = new Map(prev.map((t) => [t.id, t]));
-          for (const t of tks) byId.set(t.id, t);
+          for (const t of tks) {
+            const existing = byId.get(t.id);
+            // Newest wins per ticket: a poll answered by a lagging serverless
+            // instance must never roll back a move we already know about.
+            const keepExisting =
+              existing?.updatedAt && t.updatedAt && existing.updatedAt > t.updatedAt;
+            if (!keepExisting) byId.set(t.id, t);
+          }
           return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         });
       }

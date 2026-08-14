@@ -58,23 +58,39 @@ function state(): MutableState {
  * and the store behaves exactly as before (prove.ts stays keyless).
  */
 
-let hydrated = false;
+let lastSyncAt = 0;
 let hydration: Promise<void> | null = null;
 
+/**
+ * Freshness-aware hydration. Serverless runs many warm instances, each with
+ * its own memory; a cold-only hydrate leaves warm instances serving stale
+ * state forever, and the UI visibly bounces between instances' private
+ * worlds. So: every request re-reads the shared snapshot (one small row,
+ * throttled to once a second) and adopts it whenever it is strictly NEWER
+ * than local memory — the mutation counter `seq` is the clock. An instance
+ * that just wrote has the higher seq and keeps its memory; everyone else
+ * converges to it on their next request.
+ */
 export async function ensureHydrated(): Promise<void> {
-  if (hydrated) return;
-  hydration ??= loadState().then((loaded) => {
-    // Only adopt the remote snapshot on a cold store — a process that already
-    // has writes in memory is newer than what it last flushed.
-    if (loaded && !g.__ohState) {
-      // Normalise snapshots written before the Kanban lifecycle existed.
-      for (const t of loaded.tickets ?? []) {
-        if ((t.status as string) === "open" || !t.status) t.status = "todo";
+  const now = Date.now();
+  if (now - lastSyncAt < 1000) return;
+  hydration ??= loadState()
+    .then((loaded) => {
+      if (loaded) {
+        // Normalise snapshots written by older code versions.
+        for (const t of loaded.tickets ?? []) {
+          if ((t.status as string) === "open" || !t.status) t.status = "todo";
+          t.updatedAt ??= t.createdAt;
+        }
+        loaded.notifications ??= [];
+        loaded.comments ??= [];
+        if (!g.__ohState || loaded.seq > g.__ohState.seq) g.__ohState = loaded;
       }
-      g.__ohState = { ...loaded, notifications: loaded.notifications ?? [], comments: loaded.comments ?? [] };
-    }
-    hydrated = true;
-  });
+      lastSyncAt = Date.now();
+    })
+    .finally(() => {
+      hydration = null;
+    });
   await hydration;
 }
 
@@ -192,6 +208,7 @@ export function reassignTicket(
   if (!t) return { ok: false };
   const from = t.team;
   t.team = toTeam;
+  t.updatedAt = new Date().toISOString();
   t.routingReason = `${t.routingReason} · reassigned by human to ${toTeam}`;
   return { ok: true, from, ticket: t };
 }
@@ -226,6 +243,7 @@ export function setTicketStatus(
   if (!t) return { ok: false };
   const from = t.status;
   t.status = toStatus;
+  t.updatedAt = new Date().toISOString();
   return { ok: true, from, ticket: t };
 }
 

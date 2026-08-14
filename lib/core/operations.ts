@@ -262,6 +262,7 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     body: input.body,
     refs: Object.keys(refs).length ? refs : undefined,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     status: "todo",
   };
   addTicket(ticket);

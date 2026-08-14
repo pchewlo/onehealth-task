@@ -29,6 +29,7 @@ export interface UiTicket {
   subject: string;
   status: string;
   createdAt: string;
+  updatedAt?: string;
   routingReason: string;
   teamDecidedBy?: string;
   routedVia?: "hand_rule" | "learned" | "model" | "default";

@@ -63,6 +63,8 @@ export interface Ticket {
   body: string;
   refs?: { patientId?: string; caseId?: string };
   createdAt: string;
+  /** Bumped on every team/status change — lets clients keep the newest. */
+  updatedAt?: string;
   status: TicketStatus;
 }
 
