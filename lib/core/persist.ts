@@ -15,7 +15,9 @@ import type { MutableState } from "./store";
  */
 
 const TABLE = "demo_state";
-const ROW_ID = "main";
+// Local dev and CI use their own row so a test reset can never wipe the
+// production demo (learned the hard way).
+const ROW_ID = process.env.DEMO_STATE_ROW || "main";
 
 let client: SupabaseClient | null | undefined;
 

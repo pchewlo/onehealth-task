@@ -26,6 +26,9 @@ const uid = () => `m_${Date.now()}_${nonce++}`;
 // honest place for them — the server stays stateless.
 const CONVERSATIONS_KEY = "gal.conversations.v1";
 const CONV_IDS_KEY = "gal.convIds.v1";
+// Who you were signed in as (and which tab) survives a refresh.
+const ACTIVE_KEY = "gal.activeId.v1";
+const TAB_KEY = "gal.tab.v1";
 
 export default function Home() {
   const [principals, setPrincipals] = useState<UiPrincipal[]>([]);
@@ -70,11 +73,25 @@ export default function Home() {
       if (ids) convIds.current = JSON.parse(ids) as Record<string, string>;
       const seen = localStorage.getItem("gal.seenNotifs.v1");
       if (seen) seenNotifs.current = new Set(JSON.parse(seen) as string[]);
+      const savedActive = localStorage.getItem(ACTIVE_KEY);
+      if (savedActive) setActiveId(savedActive);
+      const savedTab = localStorage.getItem(TAB_KEY);
+      if (savedTab === "chat" || savedTab === "tickets" || savedTab === "metrics") {
+        setTab(savedTab);
+      }
     } catch {
       // Corrupt or blocked storage — start fresh rather than crash the demo.
     }
     restored.current = true;
   }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      localStorage.setItem(ACTIVE_KEY, activeId);
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {}
+  }, [activeId, tab]);
 
   const persistConvIds = () => {
     try {
@@ -209,6 +226,15 @@ export default function Home() {
     : isStaff
       ? (["chat", "tickets", "metrics"] as const)
       : (["chat", "tickets"] as const);
+
+  // Sanitize restored state once principals arrive: an unknown saved id
+  // falls back to the default, and a tab this user type doesn't have snaps
+  // to chat (e.g. a restored "metrics" under a dentist).
+  useEffect(() => {
+    if (principals.length === 0) return;
+    if (!principals.some((p) => p.id === activeId)) setActiveId("U_D1");
+    else if (!(tabs as readonly string[]).includes(tab)) setTab("chat");
+  }, [principals, activeId, tab, tabs]);
 
   const send = async (text: string) => {
     cancelIdleAsk();

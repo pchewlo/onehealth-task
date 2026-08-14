@@ -150,7 +150,7 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
         </div>
 
         {/* Funnel stats */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <StatCard label="Answers" value={String(metrics.answers)} />
           <StatCard
             label="Tickets"
@@ -163,10 +163,6 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
             label="Denials"
             value={String(metrics.denials)}
             sub={`${pct(metrics.denialRate)} of interactions`}
-          />
-          <StatCard
-            label="Feedback"
-            value={`${metrics.thumbsUp}👍 ${metrics.thumbsDown}👎`}
           />
         </div>
 
