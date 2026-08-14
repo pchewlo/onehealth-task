@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgent, type ChatMessage } from "@/lib/agent/loop";
+import { auditVisibleTo, getPrincipal, learnedRules, ticketsBy } from "@/lib/core/store";
 
 export const maxDuration = 60;
 
@@ -24,7 +25,19 @@ export async function POST(req: NextRequest) {
       messages: body.messages,
       conversationId: body.conversationId ?? "default",
     });
-    return NextResponse.json(result);
+    // Piggyback this instance's view of the rails on the response. On
+    // serverless, the GET endpoints may be answered by a different instance
+    // whose memory never saw this conversation — the chat response is the one
+    // place guaranteed to be in the same process as the writes it caused, so
+    // the client merges from here and the UI stays truthful regardless of
+    // which lambda answers the polls.
+    const principal = getPrincipal(body.principalId)!;
+    return NextResponse.json({
+      ...result,
+      audit: auditVisibleTo(principal, 60),
+      tickets: ticketsBy(body.principalId),
+      learnedRules: learnedRules(),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

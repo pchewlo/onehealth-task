@@ -37,5 +37,8 @@ export async function POST(req: NextRequest) {
     learned: res.learned ?? null,
     retiredRuleId: res.retiredRuleId ?? null,
     notLearnedBecause: res.notLearnedBecause ?? null,
+    // Same-instance snapshot for the client to merge (see /api/chat comment).
+    tickets: ticketsBy(body.principalId),
+    learnedRules: learnedRules(),
   });
 }

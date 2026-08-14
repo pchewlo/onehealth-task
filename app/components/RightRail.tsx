@@ -28,15 +28,17 @@ export function AuditLog({
           Audit log
         </h2>
         <span className="flex items-center gap-1 text-[10.5px] text-[var(--muted)]">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" /> live · every call
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" /> live · scoped to
+          you
         </span>
       </header>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">
         {entries.length === 0 && (
           <p className="px-1 pt-2 text-[11.5px] leading-relaxed text-[var(--muted)]">
-            Empty until the first tool call. Every invocation lands here — allowed{" "}
-            <span className="text-green-700">✅</span> or denied{" "}
-            <span className="text-red-700">⛔</span> — with the principal it ran as.
+            Empty until this user's first tool call. Every invocation made as them lands here —
+            allowed <span className="text-green-700">✅</span> or denied{" "}
+            <span className="text-red-700">⛔</span>. Internal staff also see their managed
+            dentists&rsquo; calls.
           </p>
         )}
         {entries.map((e) => (

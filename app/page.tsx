@@ -5,6 +5,7 @@ import { Chat } from "./components/Chat";
 import { MetricsTab } from "./components/MetricsTab";
 import { PrincipalSwitcher } from "./components/PrincipalSwitcher";
 import { AuditLog, TicketsPanel, type CorrectionNote } from "./components/RightRail";
+import { TicketBoard } from "./components/TicketBoard";
 import type {
   UiAuditEntry,
   UiLearnedRule,
@@ -20,7 +21,7 @@ const uid = () => `m_${Date.now()}_${nonce++}`;
 export default function Home() {
   const [principals, setPrincipals] = useState<UiPrincipal[]>([]);
   const [activeId, setActiveId] = useState<string>("U_D1");
-  const [tab, setTab] = useState<"chat" | "metrics">("chat");
+  const [tab, setTab] = useState<"chat" | "tickets" | "metrics">("chat");
   const [conversations, setConversations] = useState<Record<string, UiMessage[]>>({});
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -43,15 +44,52 @@ export default function Home() {
       .then((j) => setPrincipals(j.principals ?? []));
   }, []);
 
-  const refreshRails = useCallback(async (pid: string) => {
-    const [a, t] = await Promise.all([
-      fetch("/api/audit?limit=60").then((r) => r.json()),
-      fetch(`/api/tickets?principalId=${pid}`).then((r) => r.json()),
-    ]);
-    setAudit(a.audit ?? []);
-    setTickets(t.tickets ?? []);
-    setLearnedRules(t.learnedRules ?? []);
+  // Serverless-safe rails: GET polls may be answered by an instance that never
+  // saw this session's writes, so responses that DID the writes (chat,
+  // reassign) carry their own snapshots and we merge — never overwrite with
+  // less than we already know.
+  const mergeAudit = useCallback((incoming: UiAuditEntry[] | undefined) => {
+    if (!incoming?.length) return;
+    setAudit((prev) => {
+      const byId = new Map(prev.map((e) => [e.id, e]));
+      for (const e of incoming) byId.set(e.id, e);
+      return [...byId.values()]
+        .sort((a, b) => (a.ts === b.ts ? b.id.localeCompare(a.id) : b.ts.localeCompare(a.ts)))
+        .slice(0, 60);
+    });
   }, []);
+
+  const mergeTickets = useCallback(
+    (tks: UiTicket[] | undefined, rules: UiLearnedRule[] | undefined) => {
+      if (tks) {
+        setTickets((prev) => {
+          const byId = new Map(prev.map((t) => [t.id, t]));
+          for (const t of tks) byId.set(t.id, t);
+          return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        });
+      }
+      if (rules) {
+        setLearnedRules((prev) => {
+          const byId = new Map(prev.map((r) => [r.id, r]));
+          for (const r of rules) byId.set(r.id, r);
+          return [...byId.values()];
+        });
+      }
+    },
+    [],
+  );
+
+  const refreshRails = useCallback(
+    async (pid: string) => {
+      const [a, t] = await Promise.all([
+        fetch(`/api/audit?principalId=${pid}&limit=60`).then((r) => r.json()),
+        fetch(`/api/tickets?principalId=${pid}`).then((r) => r.json()),
+      ]);
+      mergeAudit(a.audit);
+      mergeTickets(t.tickets, t.learnedRules);
+    },
+    [mergeAudit, mergeTickets],
+  );
 
   useEffect(() => {
     refreshRails(activeId);
@@ -95,6 +133,9 @@ export default function Home() {
         tickets: newTickets.length ? newTickets : undefined,
       };
       setConversations((c) => ({ ...c, [activeId]: [...history, reply] }));
+      // Same-instance snapshots piggybacked on the response (serverless-safe).
+      mergeAudit(j.audit);
+      mergeTickets(j.tickets, j.learnedRules);
     } catch (e) {
       const err: UiMessage = {
         id: uid(),
@@ -126,6 +167,38 @@ export default function Home() {
     });
   };
 
+  const reassign = async (ticketId: string, team: string) => {
+    const r = await fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ principalId: activeId, ticketId, team }),
+    });
+    const j = await r.json();
+    if (r.ok) {
+      const note: CorrectionNote = j.learned
+        ? {
+            ticketId,
+            kind: "learned",
+            detail: `📚 Router learned: ${
+              j.learned.tokens?.length ? j.learned.tokens.join("+") : "this exact subject"
+            } → ${team}`,
+          }
+        : j.retiredRuleId
+          ? { ticketId, kind: "retired", detail: "Mis-firing learned rule retired." }
+          : {
+              ticketId,
+              kind: "recorded",
+              detail:
+                "Recorded as correction signal — hand-rule territory, so nothing auto-changes.",
+            };
+      setCorrectionNote(note);
+      setTimeout(() => setCorrectionNote((n) => (n === note ? null : n)), 8000);
+      // Snapshot from the instance that performed the write.
+      mergeTickets(j.tickets, j.learnedRules);
+    }
+    refreshRails(activeId);
+  };
+
   const switchPrincipal = async (id: string) => {
     // Close out the old conversation for the metrics stream, if it had turns.
     const old = conversations[activeId] ?? [];
@@ -149,8 +222,16 @@ export default function Home() {
       });
       delete convIds.current[activeId];
     }
+    // The rails are scoped to the signed-in principal — clear before the new
+    // scope's data arrives so one user's trail never lingers under another's.
+    setAudit([]);
+    setTickets([]);
+    setLearnedRules([]);
+    setCorrectionNote(null);
     setActiveId(id);
-    setTab("chat");
+    // The tickets board is per-principal, so keep it open while clicking
+    // through users; only metrics (a global view) snaps back to chat.
+    if (tab === "metrics") setTab("chat");
   };
 
   const resetDemo = async () => {
@@ -160,6 +241,8 @@ export default function Home() {
     convIds.current = {};
     setAudit([]);
     setTickets([]);
+    setLearnedRules([]);
+    setCorrectionNote(null);
     setResetting(false);
   };
 
@@ -182,7 +265,7 @@ export default function Home() {
             </p>
           </div>
           <nav className="ml-auto flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5">
-            {(["chat", "metrics"] as const).map((t) => (
+            {(["chat", "tickets", "metrics"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -205,6 +288,13 @@ export default function Home() {
             onSend={send}
             onFeedback={feedback}
           />
+        ) : tab === "tickets" && active ? (
+          <TicketBoard
+            principal={active}
+            tickets={tickets}
+            note={correctionNote}
+            onReassign={reassign}
+          />
         ) : tab === "metrics" ? (
           <MetricsTab keyMissing={keyMissing} />
         ) : (
@@ -224,37 +314,7 @@ export default function Home() {
             tickets={tickets}
             learnedRules={learnedRules}
             note={correctionNote}
-            onReassign={async (ticketId, team) => {
-              const r = await fetch("/api/tickets", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ principalId: activeId, ticketId, team }),
-              });
-              const j = await r.json();
-              if (r.ok) {
-                const note: CorrectionNote = j.learned
-                  ? {
-                      ticketId,
-                      kind: "learned",
-                      detail: `📚 Router learned: ${
-                        j.learned.tokens?.length
-                          ? j.learned.tokens.join("+")
-                          : "this exact subject"
-                      } → ${team}`,
-                    }
-                  : j.retiredRuleId
-                    ? { ticketId, kind: "retired", detail: "Mis-firing learned rule retired." }
-                    : {
-                        ticketId,
-                        kind: "recorded",
-                        detail:
-                          "Recorded as correction signal — hand-rule territory, so nothing auto-changes.",
-                      };
-                setCorrectionNote(note);
-                setTimeout(() => setCorrectionNote((n) => (n === note ? null : n)), 8000);
-              }
-              refreshRails(activeId);
-            }}
+            onReassign={reassign}
           />
         </aside>
       )}

@@ -158,6 +158,24 @@ export function readAudit(limit = 50): AuditEntry[] {
   return state().audit.slice(0, limit);
 }
 
+/**
+ * Audit visibility follows the same ownership shape as the data itself:
+ * everyone sees the calls made as themselves; internal staff additionally see
+ * the calls made by the dentists they manage. Nobody sees a stranger's trail.
+ */
+export function auditVisibleTo(p: Principal, limit = 60): AuditEntry[] {
+  return state()
+    .audit.filter((e) => {
+      if (e.principalId === p.id) return true;
+      if (p.type === "internal_staff") {
+        const actor = getPrincipal(e.principalId);
+        return Boolean(actor?.dentistId && p.manages?.includes(actor.dentistId));
+      }
+      return false;
+    })
+    .slice(0, limit);
+}
+
 /* ---------------- Metric events ---------------- */
 
 export function appendEvent(e: MetricEvent): void {

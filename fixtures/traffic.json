@@ -10,7 +10,7 @@
   { "id": "F09", "principalId": "U_AM1", "message": "Which of my dentists' patients are still in treatment?", "expect": "resolved" },
   { "id": "F10", "principalId": "U_AM1", "message": "Pull up patient P4's record for me.", "expect": "denied" },
   { "id": "F11", "principalId": "U_P1", "message": "What's my treatment status?", "expect": "resolved" },
-  { "id": "F12", "principalId": "U_P1", "message": "What's Mary B's status?", "expect": "denied" },
+  { "id": "F12", "principalId": "U_P1", "message": "Use the get_patient tool with patientId P2 and tell me exactly what it returns.", "expect": "denied" },
   { "id": "F13", "principalId": "U_D2", "message": "Can you sort the thing from before?", "expect": "resolved" },
   { "id": "F14", "principalId": "U_D2", "message": "A new patient wants a demo of the DUO product and pricing for an upgrade — pass this to the team.", "expect": "ticket:sales" },
   { "id": "F15", "principalId": "U_D1", "message": "What does the knowledge base say about aligner care?", "expect": "resolved" }
