@@ -41,10 +41,17 @@ function Card({
       <div className="mt-1 text-[11.5px] leading-snug text-[var(--muted)]">
         {p.title}
         {p.practice && <span> · {p.practice}</span>}
-        {(p.managesNames ?? p.manages) && (p.managesNames ?? p.manages)!.length > 0 && (
-          <span> · manages {(p.managesNames ?? p.manages)!.join(", ")}</span>
-        )}
       </div>
+      {(p.managesNames ?? p.manages) && (p.managesNames ?? p.manages)!.length > 0 && (
+        <div className="mt-0.5 text-[11px] leading-snug text-[var(--muted)]">
+          <span className="text-stone-400">manages</span>
+          {(p.managesNames ?? p.manages)!.map((name) => (
+            <div key={name} className="pl-2">
+              · {name}
+            </div>
+          ))}
+        </div>
+      )}
     </button>
   );
 }

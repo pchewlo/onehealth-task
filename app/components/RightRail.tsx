@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ROUTED_VIA_LABEL,
   TEAMS,
@@ -84,7 +83,6 @@ export function TicketsPanel({
   note: CorrectionNote | null;
   onReassign: (ticketId: string, team: string) => void;
 }) {
-  const [editing, setEditing] = useState<string | null>(null);
   return (
     <section className="flex min-h-0 flex-col border-t border-[var(--line)]" style={{ flexBasis: "46%" }}>
       <header className="flex items-baseline justify-between px-4 pb-2 pt-3">
@@ -105,32 +103,20 @@ export function TicketsPanel({
         {tickets.map((t) => (
           <div key={t.id} className="fade-up rounded-lg border border-[var(--line)] bg-white px-2.5 py-2">
             <div className="flex items-center gap-1.5">
-              {editing === t.id ? (
-                <select
-                  autoFocus
-                  defaultValue={t.team}
-                  onBlur={() => setEditing(null)}
-                  onChange={(e) => {
-                    onReassign(t.id, e.target.value);
-                    setEditing(null);
-                  }}
-                  className="rounded border border-[var(--line)] bg-white px-1 py-0.5 text-[10.5px]"
-                >
-                  {TEAMS.map((team) => (
-                    <option key={team} value={team}>
-                      {team}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <button
-                  onClick={() => setEditing(t.id)}
-                  title="Reassign the team — every correction is training signal for the router"
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition hover:ring-2 hover:ring-stone-300 ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
-                >
-                  {t.team} ▾
-                </button>
-              )}
+              {/* One control, styled as the badge — same pattern as the board,
+                  so the pill never swaps to bare browser chrome mid-click. */}
+              <select
+                value={t.team}
+                onChange={(e) => onReassign(t.id, e.target.value)}
+                title="Reassign the team — every correction is training signal for the router"
+                className={`appearance-none rounded-full border-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition hover:ring-2 hover:ring-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300 ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
+              >
+                {TEAMS.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+              </select>
               <span className="truncate text-[11.5px] font-medium" title={t.subject}>
                 {t.subject}
               </span>

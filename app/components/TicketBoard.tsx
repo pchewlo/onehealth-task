@@ -133,7 +133,7 @@ export function TicketBoard({
                           value={t.team}
                           onChange={(e) => onReassign(t.id, e.target.value)}
                           title="Correct the team — the router treats this as training signal"
-                          className={`rounded-full border-0 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
+                          className={`appearance-none rounded-full border-0 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide transition hover:ring-2 hover:ring-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300 ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
                         >
                           {TEAMS.map((opt) => (
                             <option key={opt} value={opt}>
