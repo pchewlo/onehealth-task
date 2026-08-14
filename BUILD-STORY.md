@@ -220,3 +220,61 @@ parameter, serverless conflict) and what overrode it.
 2. Routing precedence ladder: hand rules / learned rules / model suggestion / default — with the correction arrows (teach into tier 2 only; retire on mis-fire; hand-territory corrections exit to "evidence for humans").
 3. The injection path: K4 article → model context → attempted get_patient(P3) → ⛔ OUT_OF_SCOPE → honest reply. Caption: "Both outcomes pass; the guarantee never depended on the model behaving."
 4. The screenshot set: denial turning red in the audit pane; the ticket badge flipping from "model proposal" to "learned rule"; the 62→78% sparkline with the synthetic-data caption.
+
+---
+
+# Complete decision log (appended after the build sessions)
+
+Every material decision across the project, grouped, each with its why. Chronology is roughly top-to-bottom within groups.
+
+## Architecture
+1. **Single Next.js app on Vercel, not the spec's pnpm workspace + Express + stdio MCP.** Serverless has no persistent processes or writable disk; a live URL beat architectural fidelity. The MCP server runs over the SDK's in-memory transport, constructed per request around the resolved principal — same binding property, different mechanics.
+2. **Real MCP SDK, kept honest.** `lib/core` imports nothing from MCP/Next/React, so "MCP is a swappable transport" is grep-checkable, not rhetorical.
+3. **Model: claude-sonnet-5** (spec said sonnet-4-6 — superseded; `temperature` now rejected by the API and dropped). Sonnet over Opus because the workload is tool orchestration: latency and cost beat depth. Build agent was Opus 5; the door doesn't care which model is behind it.
+4. **Keyless by design where possible.** Core, MCP layer, proof tests 1–8/10, and the whole UI shell run without an API key — the expensive dependency is optional, which later saved the build during the credits confusion.
+
+## Security model
+5. **One choke point, fail closed.** Every operation calls `authorize()` first; anything unmatched is denied. New entities/fields are locked until someone writes a rule.
+6. **Scope before existence.** Out-of-scope and nonexistent ids return the same OUT_OF_SCOPE — the error channel can't enumerate the database.
+7. **Pick-allowlists, never delete-lists.** `dob`/`email` are in no allowlist; there is no code path that returns them. New seed fields are private by default.
+8. **FORBIDDEN_TYPE vs OUT_OF_SCOPE are different denials.** "This operation doesn't exist for your principal type" teaches the model a different fact than "that specific record isn't yours." (First proof failure of the build.)
+9. **Denials are structured tool errors, not protocol failures** — the model relays refusals honestly instead of crashing the loop.
+10. **Principal bound at MCP-server construction as a closure.** Not a tool argument, not a header; the model has no vocabulary to name a different principal.
+11. **The red team lives in the data.** KB article K4 carries the injection payload; either model outcome (decline, or attempt-and-blocked) passes proof test 9. No defensive prompting anywhere — the guarantee never depends on model behaviour. (Live bonus: an organic social-engineering session as Dr Mehta ended with the model refusing every angle and filing a ticket about the attempt unprompted.)
+12. **Audit is scoped like the data**: your own calls, plus managed dentists' calls for staff. Added when the flat log was recognised as its own leak.
+13. **Internal tickets** (parallel session): the model can flag a session-misuse report to staff without the subject user seeing it — disclosure policy as a product decision.
+
+## Routing and learning (M7)
+14. **Rules table routes; the model only suggests; both values stored.** Every disagreement is a labelled training example accumulating as a by-product of work, and the agreement rate is watchable before any trust decision.
+15. **Learning precedence is the architecture**: hand rules always win → learned rules fill only the default-fallthrough gap → model suggestion → default. Corrections against hand-rule territory are recorded, never auto-applied; a mis-firing learned rule is retired by the correcting click. Proof test 10 asserts the isolation property directly.
+16. **Conservative token extraction** — tokens overlapping any hand keyword are excluded (it rejected "track" vs `tracking` on its first real input); exact-subject match is the fallback. Ship beats elegant.
+17. **Word-boundary keyword matching** after the live model wrote "No details available yet." and `lab` fired inside *avai-lab-le*. Only found by running the real model against the real router.
+18. **Demo choreography pins the model's words.** The model rewrites ticket subjects/bodies helpfully ("please investigate shipment status" — an ops keyword); the teach-the-router chips instruct verbatim titles and bodies.
+
+## Agent
+19. **Identity context in the system prompt is information, not authority** — added after the eval harness caught a patient tripping a denial while discovering their own id. Changes which tool the model reaches for; changes nothing about what the server allows.
+20. **Tool definitions bridged mechanically** from MCP `listTools()` — the layer stays the single source of truth for what the model can do.
+
+## Product surface
+21. **The ownership rule is drawn as UI.** Switcher hierarchy: staff → managed dentists (practice names, one per line) → their patients; unmanaged dentists in a separate "No account manager" group. What you can click is what scope spans.
+22. **Kanban statuses (To Do / In Progress / Done / Blocked) are deliberately separate from team routing.** Dragging a card = workflow progress, no learning; changing the team on a card = routing correction, the training signal. Keeping them apart keeps the training data clean.
+23. **Comments ride the ticket's visibility** — no scope of their own; 280-char cap.
+24. **Notifications are addressed, not broadcast.** Exactly one recipient (the creator); self-moves silent; nothing in the payload the recipient can't already see. Chat notices deep-link to the highlighted card on the board.
+25. **Conversation-level feedback replaced per-message thumbs.** The idle "Did this resolve your query?" prompt (30s, once per conversation segment, repeatable across segments, skips persist in the transcript, neutral button styling) produces gold-label `conversation_end` events (`explicit: true`) that can calibrate the inferred majority — explicit signal where you can get it, measured inference where you can't. Dev trigger button bypasses the timer and explains itself when there's nothing to ask.
+26. **Machine tokens render as badges** in chat (`in_treatment`, `aligners_in_production`, `treatment_planning`, SOLO/DUO) — only unambiguous tokens; words like "refinement" stay prose.
+
+## Metrics and eval
+27. **Resolution rate as the OMTM** — computable from the event stream on day one; unresolved conversations get reason buckets. Synthetic backfill is deterministic and visibly labelled; live events move the number.
+28. **Routing agreement + reassignment rate are the autonomy instruments** — the concrete numbers a promotion decision would read.
+29. **The simulator is the eval harness.** Its first run (12/15) produced three diagnoses: two expected-labels written against an assumed path rather than an outcome (fixed with direct id-probes), and one real product gap (identity context, above). "The harness's first three failures were a design review I didn't have to schedule."
+
+## Distributed state (the hard-won part)
+30. **In-memory store with a named Postgres seam** → optional Supabase JSONB single-row durability (parallel session) → **missing env key found** (prod silently islanded) → freshness-aware hydration (mutation-counter clock, adopt-if-newer) → **still lossy**: writes on a stale base blind-overwrote the snapshot (two Done moves erased) → final shape: **read-merge-write convergence** — per-ticket newest-wins, unions for append-only collections, tombstones for retired learned rules, reset epochs that outrank lagging instances. Verified by sabotage test (rewrite the remote row stale; a mutation restores truth) and process-death test.
+31. **Responses piggyback their own snapshots.** On serverless, the instance that wrote is the only one guaranteed current — chat/reassign responses carry scoped audit/tickets/rules and the client merges; polls can only add, never roll back.
+32. **Local dev gets its own state row** (`DEMO_STATE_ROW`) — after a local test reset wiped the shared production row. Environment separation is a lesson you only need once.
+
+## Process
+33. **Spec first, then execution with decision checkpoints.** The machine's four opening questions (deploy shape, key handling, scope, writeup ownership) were real decisions surfaced, not requirements archaeology.
+34. **Proof-driven acceptance**: `npm run prove` is the checklist executed — 13 assertions including the live injection and the learning-isolation property. Every "fixed" claim in this log had a test or a live probe behind it.
+35. **Two parallel Claude sessions on one tree** worked but interleaved commits (one sweep shipped the other session's completed feature); coordination rule adopted: commit promptly or let one session own commits.
+36. **Two wallets, one email**: claude.ai usage credits ≠ Anthropic Console API credits. An hour of confusion, one paragraph of documentation.
