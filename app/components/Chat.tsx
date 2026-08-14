@@ -273,7 +273,7 @@ export function Chat({
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <button
                         onClick={() => onResolve(m.id, "yes")}
-                        className="rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:opacity-90"
+                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
                       >
                         Yes, resolved
                       </button>
