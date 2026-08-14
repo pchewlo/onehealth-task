@@ -70,12 +70,14 @@ export function PrincipalSwitcher({
   onSwitch,
   onReset,
   resetting,
+  onDevAskResolve,
 }: {
   principals: UiPrincipal[];
   activeId: string;
   onSwitch: (id: string) => void;
   onReset: () => void;
   resetting: boolean;
+  onDevAskResolve: () => void;
 }) {
   const staff = principals.filter((p) => p.type === "internal_staff");
   const dentists = principals.filter((p) => p.type === "dentist");
@@ -150,6 +152,13 @@ export function PrincipalSwitcher({
           className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-[12px] font-medium text-stone-600 transition hover:bg-stone-50 disabled:opacity-50"
         >
           {resetting ? "Resetting…" : "Reset demo"}
+        </button>
+        <button
+          onClick={onDevAskResolve}
+          title="Dev: trigger the idle resolve-prompt immediately instead of waiting 30s"
+          className="w-full rounded-lg border border-dashed border-[var(--line)] bg-white px-3 py-1.5 text-[11px] text-stone-400 transition hover:bg-stone-50 hover:text-stone-600"
+        >
+          ⚙ Trigger &ldquo;did this resolve?&rdquo;
         </button>
       </div>
     </aside>

@@ -56,6 +56,9 @@ export interface Ticket {
   teamDecidedBy: "rules" | "model_confirmed" | "learned" | "model";
   /** Which tier of the routing precedence actually decided the team. */
   routedVia: "hand_rule" | "learned" | "model" | "default";
+  /** The team the router chose at creation — a correction back to this is an
+   * undo, not a lesson. */
+  routedTeam?: Team;
   /** Set when a learned rule fired, so a correction can retire it. */
   learnedRuleId?: string;
   routingReason: string;
@@ -188,6 +191,9 @@ export interface MetricEvent {
   /** conversation_end */
   resolved?: boolean;
   reason?: UnresolvedReason;
+  /** true when the user answered the resolve prompt themselves — a gold
+   * label, vs the inferred label from the end-of-conversation heuristic. */
+  explicit?: boolean;
   /** message */
   text?: string;
   role?: "user" | "assistant";

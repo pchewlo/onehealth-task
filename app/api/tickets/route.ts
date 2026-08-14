@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
     to: team,
     learned: res.learned ?? null,
     retiredRuleId: res.retiredRuleId ?? null,
+    withdrewRuleId: res.withdrewRuleId ?? null,
     notLearnedBecause: res.notLearnedBecause ?? null,
     // Same-instance snapshot for the client to merge (see /api/chat comment).
     tickets: ticketsVisibleTo(principal),

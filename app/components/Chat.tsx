@@ -193,6 +193,7 @@ export function Chat({
   keyMissing,
   onSend,
   onFeedback,
+  onResolve,
   onOpenTicket,
 }: {
   principal: UiPrincipal;
@@ -201,6 +202,7 @@ export function Chat({
   keyMissing: boolean;
   onSend: (text: string) => void;
   onFeedback: (messageId: string, rating: "up" | "down") => void;
+  onResolve: (messageId: string, verdict: "yes" | "bad_answer" | "confusion") => void;
   onOpenTicket: (ticketId: string) => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -250,6 +252,40 @@ export function Chat({
                   {stamp(m.ts) && (
                     <div className="mt-0.5 pr-1 text-right text-[10px] tabular-nums text-stone-400">
                       {stamp(m.ts)}
+                    </div>
+                  )}
+                </div>
+              ) : m.resolveAsk ? (
+                <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-soft)]/50 px-4 py-3">
+                  <div className="text-[12.5px] font-medium text-stone-700">
+                    Did this resolve your query?
+                  </div>
+                  {m.resolveAnswer ? (
+                    <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">
+                      {m.resolveAnswer === "yes"
+                        ? "Thanks — logged as resolved ✓ Your next message starts a fresh conversation."
+                        : "Thanks — logged as unresolved. Your next message starts a fresh conversation."}
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => onResolve(m.id, "yes")}
+                        className="rounded-full bg-[var(--accent)] px-3 py-1 text-[11.5px] font-semibold text-white transition hover:opacity-90"
+                      >
+                        Yes, resolved
+                      </button>
+                      <button
+                        onClick={() => onResolve(m.id, "bad_answer")}
+                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-red-300 hover:text-red-700"
+                      >
+                        No — wrong answer
+                      </button>
+                      <button
+                        onClick={() => onResolve(m.id, "confusion")}
+                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-amber-400 hover:text-amber-700"
+                      >
+                        No — still need help
+                      </button>
                     </div>
                   )}
                 </div>

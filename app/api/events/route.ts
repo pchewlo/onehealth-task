@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     rating?: "up" | "down";
     resolved?: boolean;
     reason?: UnresolvedReason;
+    explicit?: boolean;
   };
   if (!body.type || !body.principalId || !body.conversationId) {
     return NextResponse.json(
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     rating: body.rating,
     resolved: body.resolved,
     reason: body.reason,
+    explicit: body.explicit,
   });
   await persistNow();
   return NextResponse.json({ ok: true });

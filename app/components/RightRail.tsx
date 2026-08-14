@@ -156,10 +156,13 @@ export function TicketsPanel({
 
       {learnedRules.length > 0 && (
         <div className="border-t border-dashed border-[var(--line)] px-4 py-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-indigo-500">
+          <div className="flex items-baseline text-[10px] font-semibold uppercase tracking-[0.14em] text-indigo-500">
             📚 Learned rules
+            <span className="ml-auto font-normal normal-case tracking-normal text-stone-400">
+              one per ticket · newest correction wins
+            </span>
           </div>
-          <div className="mt-1 space-y-0.5">
+          <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto">
             {learnedRules.map((r) => (
               <div key={r.id} className="fade-up flex items-center gap-1.5 text-[10.5px] text-[var(--muted)]">
                 <span className="font-mono text-indigo-700">

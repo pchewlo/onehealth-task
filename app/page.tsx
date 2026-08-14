@@ -41,6 +41,8 @@ export default function Home() {
   const [comments, setComments] = useState<UiComment[]>([]);
   const [correctionNote, setCorrectionNote] = useState<CorrectionNote | null>(null);
   const [focusTicketId, setFocusTicketId] = useState<string | null>(null);
+  const idleAskTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const askedConvs = useRef<Set<string>>(new Set());
   const seenNotifs = useRef<Set<string>>(new Set());
 
   // One conversation id per principal per page load — feeds the metric events.
@@ -206,8 +208,11 @@ export default function Home() {
       : (["chat", "tickets"] as const);
 
   const send = async (text: string) => {
+    cancelIdleAsk();
+    // Typing again dismisses an unanswered prompt — the conversation continues.
+    const withoutAsk = messages.filter((m) => !(m.resolveAsk && !m.resolveAnswer));
     const userMsg: UiMessage = { id: uid(), role: "user", content: text, ts: new Date().toISOString() };
-    const history = [...messages, userMsg];
+    const history = [...withoutAsk, userMsg];
     setConversations((c) => ({ ...c, [activeId]: history }));
     setBusy(true);
     try {
@@ -255,10 +260,86 @@ export default function Home() {
     } finally {
       setBusy(false);
       refreshRails(activeId);
+      scheduleIdleAsk(activeId);
     }
   };
 
+  /* ── "Did this resolve your query?" ──
+   * Fires once per conversation after 30s of silence following an assistant
+   * reply, unless the user already gave explicit 👍/👎. An answer becomes a
+   * GOLD-LABEL conversation_end (explicit: true) — user-stated, not inferred —
+   * and the next message starts a fresh conversation. Silence falls through
+   * to the usual inferred label on principal switch. */
+  const IDLE_ASK_MS = 30_000;
+
+  const cancelIdleAsk = () => {
+    if (idleAskTimer.current) clearTimeout(idleAskTimer.current);
+    idleAskTimer.current = null;
+  };
+
+  const injectResolveAsk = useCallback(
+    (pid: string) => {
+      const conv = convId(pid);
+      if (askedConvs.current.has(conv)) return;
+      setConversations((c) => {
+        const thread = c[pid] ?? [];
+        const last = [...thread].reverse().find((m) => m.role === "assistant" && !m.notice);
+        // Nothing to close, already asked, or the user already rated it.
+        if (!last || last.error || last.feedback || thread.some((m) => m.resolveAsk)) return c;
+        askedConvs.current.add(conv);
+        return {
+          ...c,
+          [pid]: [
+            ...thread,
+            {
+              id: `ask_${Date.now()}`,
+              role: "assistant",
+              content: "Did this resolve your query?",
+              ts: new Date().toISOString(),
+              resolveAsk: true,
+            },
+          ],
+        };
+      });
+    },
+    [],
+  );
+
+  const scheduleIdleAsk = useCallback(
+    (pid: string) => {
+      cancelIdleAsk();
+      idleAskTimer.current = setTimeout(() => injectResolveAsk(pid), IDLE_ASK_MS);
+    },
+    [injectResolveAsk],
+  );
+
+  const answerResolve = async (messageId: string, verdict: "yes" | "bad_answer" | "confusion") => {
+    const conv = convId(activeId);
+    setConversations((c) => ({
+      ...c,
+      [activeId]: (c[activeId] ?? []).map((m) =>
+        m.id === messageId ? { ...m, resolveAnswer: verdict } : m,
+      ),
+    }));
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "conversation_end",
+        principalId: activeId,
+        conversationId: conv,
+        resolved: verdict === "yes",
+        reason: verdict === "yes" ? undefined : verdict,
+        explicit: true,
+      }),
+    });
+    // The conversation is closed; the next message starts a new one.
+    delete convIds.current[activeId];
+    persistConvIds();
+  };
+
   const feedback = async (messageId: string, rating: "up" | "down") => {
+    cancelIdleAsk();
     setConversations((c) => ({
       ...c,
       [activeId]: (c[activeId] ?? []).map((m) => (m.id === messageId ? { ...m, feedback: rating } : m)),
@@ -299,12 +380,20 @@ export default function Home() {
           }
         : j.retiredRuleId
           ? { ticketId, kind: "retired", detail: "Mis-firing learned rule retired." }
-          : {
-              ticketId,
-              kind: "recorded",
-              detail:
-                "Recorded as correction signal — hand-rule territory, so nothing auto-changes.",
-            };
+          : j.withdrewRuleId
+            ? {
+                ticketId,
+                kind: "retired",
+                detail: "↩️ Back to the original routing — the rule this ticket taught was withdrawn.",
+              }
+            : j.notLearnedBecause?.startsWith("back to the original")
+              ? { ticketId, kind: "recorded", detail: "Back to the original routing — nothing to learn." }
+              : {
+                  ticketId,
+                  kind: "recorded",
+                  detail:
+                    "Recorded as correction signal — hand-rule territory, so nothing auto-changes.",
+                };
       setCorrectionNote(note);
       setTimeout(() => setCorrectionNote((n) => (n === note ? null : n)), 8000);
       // Snapshot from the instance that performed the write.
@@ -396,6 +485,8 @@ export default function Home() {
   };
 
   const resetDemo = async () => {
+    cancelIdleAsk();
+    askedConvs.current.clear();
     setResetting(true);
     await fetch("/api/reset", { method: "POST" });
     setConversations({});
@@ -420,6 +511,10 @@ export default function Home() {
         onSwitch={switchPrincipal}
         onReset={resetDemo}
         resetting={resetting}
+        onDevAskResolve={() => {
+          cancelIdleAsk();
+          injectResolveAsk(activeId);
+        }}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -464,6 +559,7 @@ export default function Home() {
             keyMissing={keyMissing}
             onSend={send}
             onFeedback={feedback}
+            onResolve={answerResolve}
             onOpenTicket={openTicket}
           />
         ) : tab === "tickets" && active && !isPatient ? (

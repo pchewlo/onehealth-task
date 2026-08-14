@@ -63,6 +63,9 @@ export interface UiMessage {
   error?: boolean;
   /** A board-update notice injected into the creator's thread (not model output). */
   notice?: { ticketId: string };
+  /** An idle-triggered "did this resolve it?" prompt (app-injected, not model output). */
+  resolveAsk?: boolean;
+  resolveAnswer?: "yes" | "bad_answer" | "confusion";
 }
 
 export interface UiComment {

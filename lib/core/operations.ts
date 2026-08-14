@@ -6,6 +6,7 @@ import {
   addLearnedRule,
   addNotification,
   addTicket,
+  learnedRules,
   appendEvent,
   casesForDentists,
   casesForPatient,
@@ -256,6 +257,7 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     teamProposedByModel: routing.teamProposedByModel,
     teamDecidedBy: routing.teamDecidedBy,
     routedVia: routing.routedVia,
+    routedTeam: routing.team,
     learnedRuleId: routing.learnedRuleId,
     routingReason: routing.routingReason,
     subject: input.subject,
@@ -306,6 +308,8 @@ export interface CorrectionResult {
   learned?: LearnedRule;
   /** Present when the correction retired a mis-firing learned rule. */
   retiredRuleId?: string;
+  /** Present when reverting to the original routing withdrew this ticket's rule. */
+  withdrewRuleId?: string;
   /** Present when policy forbade learning (hand-rule territory). */
   notLearnedBecause?: string;
 }
@@ -372,13 +376,39 @@ export function correctTicket(
     };
   }
 
+  // One lesson per ticket: a new correction replaces whatever this ticket
+  // taught before, so flip-flopping never accumulates conflicting rules.
+  const prior = learnedRules().find((r) => r.sourceTicketId === t.id);
+  if (prior) retireLearnedRule(prior.id);
+
+  // Correcting back to the router's original choice is an undo, not a lesson —
+  // the withdrawal above already unlearned it.
+  if (t.routedTeam && toTeam === t.routedTeam) {
+    return {
+      ok: true,
+      from: res.from,
+      withdrewRuleId: prior?.id,
+      notLearnedBecause: prior
+        ? "back to the original routing — the rule this ticket taught was withdrawn"
+        : "back to the original routing — nothing to learn",
+    };
+  }
+
   const tokens = extractTokens(t.subject, patientNames);
+  const exactSubject = tokens.length ? undefined : t.subject.trim().toLowerCase();
+  // Identical trigger, one rule: an older rule with the same tokens (or same
+  // exact-subject fallback) would shadow this one — newest correction wins.
+  const key = tokens.length ? [...tokens].sort().join("+") : exactSubject;
+  for (const r of learnedRules()) {
+    const rKey = r.tokens.length ? [...r.tokens].sort().join("+") : r.exactSubject;
+    if (rKey === key) retireLearnedRule(r.id);
+  }
   const rule: LearnedRule = {
     id: nextId("LR"),
     tokens,
     // Fallback when extraction yields nothing: exact-match the subject line.
     // Crude, but the loop still demos — ship beats elegant.
-    exactSubject: tokens.length ? undefined : t.subject.trim().toLowerCase(),
+    exactSubject,
     team: toTeam,
     sourceTicketId: t.id,
     createdAt: new Date().toISOString(),
