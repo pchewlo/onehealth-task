@@ -59,8 +59,31 @@ export interface UiMessage {
   feedback?: "up" | "down";
   error?: boolean;
   /** A board-update notice injected into the creator's thread (not model output). */
-  notice?: { ticketId: string; fromTeam: string; toTeam: string; byName: string };
+  notice?: { ticketId: string };
 }
+
+export interface UiComment {
+  id: string;
+  ticketId: string;
+  ts: string;
+  byPrincipalId: string;
+  byName: string;
+  text: string;
+}
+
+export const STATUS_COLUMNS = [
+  { key: "todo", label: "To Do", dot: "bg-stone-400" },
+  { key: "in_progress", label: "In Progress", dot: "bg-sky-500" },
+  { key: "done", label: "Done", dot: "bg-green-500" },
+  { key: "blocked", label: "Blocked", dot: "bg-red-500" },
+] as const;
+
+export const STATUS_LABEL: Record<string, string> = {
+  todo: "To Do",
+  in_progress: "In Progress",
+  done: "Done",
+  blocked: "Blocked",
+};
 
 export interface UiNotification {
   id: string;
@@ -68,8 +91,11 @@ export interface UiNotification {
   forPrincipalId: string;
   ticketId: string;
   subject: string;
-  fromTeam: string;
-  toTeam: string;
+  fromTeam?: string;
+  toTeam?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  comment?: string;
   byName: string;
 }
 

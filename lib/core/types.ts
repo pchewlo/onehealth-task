@@ -63,7 +63,20 @@ export interface Ticket {
   body: string;
   refs?: { patientId?: string; caseId?: string };
   createdAt: string;
-  status: "open";
+  status: TicketStatus;
+}
+
+/** Kanban lifecycle. New tickets start in "todo". */
+export type TicketStatus = "todo" | "in_progress" | "done" | "blocked";
+
+/** A lightweight note on a ticket, by anyone allowed to see that ticket. */
+export interface TicketComment {
+  id: string;
+  ticketId: string;
+  ts: string;
+  byPrincipalId: string;
+  byName: string;
+  text: string;
 }
 
 /**
@@ -96,8 +109,14 @@ export interface TicketNotification {
   forPrincipalId: string;
   ticketId: string;
   subject: string;
-  fromTeam: Team;
-  toTeam: Team;
+  /** Set on a routing correction. */
+  fromTeam?: Team;
+  toTeam?: Team;
+  /** Set on a board (status) move. */
+  fromStatus?: TicketStatus;
+  toStatus?: TicketStatus;
+  /** Set on a comment (preview, truncated). */
+  comment?: string;
   /** Display name of who moved it, resolved server-side. */
   byName: string;
 }

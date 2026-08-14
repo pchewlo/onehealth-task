@@ -8,6 +8,7 @@ import { AuditLog, TicketsPanel, type CorrectionNote } from "./components/RightR
 import { TicketBoard } from "./components/TicketBoard";
 import type {
   UiAuditEntry,
+  UiComment,
   UiLearnedRule,
   UiMessage,
   UiNotification,
@@ -15,6 +16,7 @@ import type {
   UiTicket,
   UiToolCall,
 } from "./lib/ui-types";
+import { STATUS_LABEL } from "./lib/ui-types";
 
 let nonce = 0;
 const uid = () => `m_${Date.now()}_${nonce++}`;
@@ -36,6 +38,7 @@ export default function Home() {
   const [audit, setAudit] = useState<UiAuditEntry[]>([]);
   const [tickets, setTickets] = useState<UiTicket[]>([]);
   const [learnedRules, setLearnedRules] = useState<UiLearnedRule[]>([]);
+  const [comments, setComments] = useState<UiComment[]>([]);
   const [correctionNote, setCorrectionNote] = useState<CorrectionNote | null>(null);
   const [focusTicketId, setFocusTicketId] = useState<string | null>(null);
   const seenNotifs = useRef<Set<string>>(new Set());
@@ -100,7 +103,7 @@ export default function Home() {
   }, []);
 
   const mergeTickets = useCallback(
-    (tks: UiTicket[] | undefined, rules: UiLearnedRule[] | undefined) => {
+    (tks: UiTicket[] | undefined, rules: UiLearnedRule[] | undefined, cms?: UiComment[]) => {
       if (tks) {
         setTickets((prev) => {
           const byId = new Map(prev.map((t) => [t.id, t]));
@@ -113,6 +116,13 @@ export default function Home() {
           const byId = new Map(prev.map((r) => [r.id, r]));
           for (const r of rules) byId.set(r.id, r);
           return [...byId.values()];
+        });
+      }
+      if (cms) {
+        setComments((prev) => {
+          const byId = new Map(prev.map((c) => [c.id, c]));
+          for (const c of cms) byId.set(c.id, c);
+          return [...byId.values()].sort((a, b) => a.ts.localeCompare(b.ts));
         });
       }
     },
@@ -135,11 +145,16 @@ export default function Home() {
     setConversations((c) => {
       const next = { ...c };
       for (const n of fresh) {
+        const content = n.comment
+          ? `${n.byName} commented on your ticket ${n.ticketId} ("${n.subject}"): “${n.comment}”`
+          : n.toStatus
+            ? `${n.byName} moved your ticket ${n.ticketId} ("${n.subject}") to ${STATUS_LABEL[n.toStatus] ?? n.toStatus}.`
+            : `${n.byName} moved your ticket ${n.ticketId} ("${n.subject}") from ${n.fromTeam} to ${n.toTeam}.`;
         const msg: UiMessage = {
           id: `notice_${n.id}`,
           role: "assistant",
-          content: `${n.byName} moved your ticket ${n.ticketId} ("${n.subject}") from ${n.fromTeam} to ${n.toTeam}.`,
-          notice: { ticketId: n.ticketId, fromTeam: n.fromTeam, toTeam: n.toTeam, byName: n.byName },
+          content,
+          notice: { ticketId: n.ticketId },
         };
         const thread = next[n.forPrincipalId] ?? [];
         if (!thread.some((m) => m.id === msg.id)) {
@@ -157,7 +172,7 @@ export default function Home() {
         fetch(`/api/tickets?principalId=${pid}`).then((r) => r.json()),
       ]);
       mergeAudit(a.audit);
-      mergeTickets(t.tickets, t.learnedRules);
+      mergeTickets(t.tickets, t.learnedRules, t.comments);
       ingestNotifications(t.notifications);
     },
     [mergeAudit, mergeTickets, ingestNotifications],
@@ -217,7 +232,7 @@ export default function Home() {
       setConversations((c) => ({ ...c, [activeId]: [...history, reply] }));
       // Same-instance snapshots piggybacked on the response (serverless-safe).
       mergeAudit(j.audit);
-      mergeTickets(j.tickets, j.learnedRules);
+      mergeTickets(j.tickets, j.learnedRules, j.comments);
       ingestNotifications(j.notifications);
     } catch (e) {
       const err: UiMessage = {
@@ -283,7 +298,8 @@ export default function Home() {
       setCorrectionNote(note);
       setTimeout(() => setCorrectionNote((n) => (n === note ? null : n)), 8000);
       // Snapshot from the instance that performed the write.
-      mergeTickets(j.tickets, j.learnedRules);
+      mergeTickets(j.tickets, j.learnedRules, j.comments);
+      ingestNotifications(j.notifications);
     }
     refreshRails(activeId);
   };
@@ -324,6 +340,34 @@ export default function Home() {
     });
   };
 
+  const changeStatus = async (ticketId: string, status: string) => {
+    const r = await fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ principalId: activeId, ticketId, status }),
+    });
+    const j = await r.json();
+    if (r.ok) {
+      mergeTickets(j.tickets, j.learnedRules, j.comments);
+      ingestNotifications(j.notifications);
+    }
+    refreshRails(activeId);
+  };
+
+  const addTicketComment = async (ticketId: string, text: string) => {
+    const r = await fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ principalId: activeId, ticketId, comment: text }),
+    });
+    const j = await r.json();
+    if (r.ok) {
+      mergeTickets(j.tickets, j.learnedRules, j.comments);
+      ingestNotifications(j.notifications);
+    }
+    refreshRails(activeId);
+  };
+
   const switchPrincipal = async (id: string) => {
     closeOutConversation(activeId);
     // The rails are scoped to the signed-in principal — clear before the new
@@ -331,6 +375,7 @@ export default function Home() {
     setAudit([]);
     setTickets([]);
     setLearnedRules([]);
+    setComments([]);
     setCorrectionNote(null);
     setActiveId(id);
     // The tickets board is per-principal, so keep it open while clicking
@@ -352,6 +397,7 @@ export default function Home() {
     setAudit([]);
     setTickets([]);
     setLearnedRules([]);
+    setComments([]);
     setCorrectionNote(null);
     setResetting(false);
   };
@@ -414,9 +460,12 @@ export default function Home() {
           <TicketBoard
             principal={active}
             tickets={tickets}
+            comments={comments}
             note={correctionNote}
             focusTicketId={focusTicketId}
             onReassign={reassign}
+            onStatusChange={changeStatus}
+            onComment={addTicketComment}
           />
         ) : tab === "metrics" && isStaff ? (
           <MetricsTab keyMissing={keyMissing} />

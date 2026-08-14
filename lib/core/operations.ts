@@ -17,10 +17,13 @@ import {
   rawPatient,
   reassignTicket,
   retireLearnedRule,
+  addComment,
   searchKb,
+  setTicketStatus,
+  ticketInScopeOf,
   ticketsVisibleTo,
 } from "./store";
-import type { Decision, LearnedRule, Principal, Team, Ticket } from "./types";
+import type { Decision, LearnedRule, Principal, Team, Ticket, TicketComment, TicketStatus } from "./types";
 
 /**
  * The seven governed operations.
@@ -259,7 +262,7 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     body: input.body,
     refs: Object.keys(refs).length ? refs : undefined,
     createdAt: new Date().toISOString(),
-    status: "open",
+    status: "todo",
   };
   addTicket(ticket);
 
@@ -381,6 +384,72 @@ export function correctTicket(
   };
   addLearnedRule(rule);
   return { ok: true, from: res.from, learned: rule };
+}
+
+/**
+ * A board (status) move. Same visibility scope as reassignment — enforced in
+ * setTicketStatus — and the same addressee-only notification: the creator
+ * hears about moves made by anyone else, nobody else hears anything.
+ */
+export function progressTicket(
+  principalId: string,
+  ticketId: string,
+  toStatus: TicketStatus,
+): { ok: boolean; from?: TicketStatus } {
+  const res = setTicketStatus(ticketId, principalId, toStatus);
+  if (!res.ok) return { ok: false };
+  const t = res.ticket;
+  if (t.createdBy !== principalId && res.from !== toStatus) {
+    addNotification({
+      id: nextId("N"),
+      ts: new Date().toISOString(),
+      forPrincipalId: t.createdBy,
+      ticketId: t.id,
+      subject: t.subject,
+      fromStatus: res.from,
+      toStatus,
+      byName: getPrincipal(principalId)?.name ?? "someone",
+    });
+  }
+  return { ok: true, from: res.from };
+}
+
+/**
+ * A lightweight comment. Who may comment = who may see the ticket (the same
+ * inBookOf scope as everything else); the creator is notified of comments by
+ * anyone else, with the same addressee-only delivery as moves.
+ */
+export function commentOnTicket(
+  principalId: string,
+  ticketId: string,
+  text: string,
+): { ok: boolean; comment?: TicketComment } {
+  const t = ticketInScopeOf(principalId, ticketId);
+  const trimmed = text.trim().slice(0, 280);
+  if (!t || !trimmed) return { ok: false };
+
+  const comment: TicketComment = {
+    id: nextId("C"),
+    ticketId: t.id,
+    ts: new Date().toISOString(),
+    byPrincipalId: principalId,
+    byName: getPrincipal(principalId)?.name ?? "someone",
+    text: trimmed,
+  };
+  addComment(comment);
+
+  if (t.createdBy !== principalId) {
+    addNotification({
+      id: nextId("N"),
+      ts: comment.ts,
+      forPrincipalId: t.createdBy,
+      ticketId: t.id,
+      subject: t.subject,
+      comment: trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed,
+      byName: comment.byName,
+    });
+  }
+  return { ok: true, comment };
 }
 
 /** Convenience for the UI, not exposed as a tool. */

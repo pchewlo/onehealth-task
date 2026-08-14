@@ -9,7 +9,9 @@ import type {
   PatientRecord,
   Principal,
   Ticket,
+  TicketComment,
   TicketNotification,
+  TicketStatus,
 } from "./types";
 
 /**
@@ -30,6 +32,7 @@ import type {
 export interface MutableState {
   tickets: Ticket[];
   notifications: TicketNotification[];
+  comments: TicketComment[];
   audit: AuditEntry[];
   events: MetricEvent[];
   learnedRules: LearnedRule[];
@@ -41,7 +44,7 @@ const g = globalThis as unknown as { __ohState?: MutableState };
 
 function state(): MutableState {
   if (!g.__ohState) {
-    g.__ohState = { tickets: [], notifications: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
+    g.__ohState = { tickets: [], notifications: [], comments: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
   }
   return g.__ohState;
 }
@@ -63,7 +66,13 @@ export async function ensureHydrated(): Promise<void> {
   hydration ??= loadState().then((loaded) => {
     // Only adopt the remote snapshot on a cold store — a process that already
     // has writes in memory is newer than what it last flushed.
-    if (loaded && !g.__ohState) g.__ohState = { ...loaded, notifications: loaded.notifications ?? [] };
+    if (loaded && !g.__ohState) {
+      // Normalise snapshots written before the Kanban lifecycle existed.
+      for (const t of loaded.tickets ?? []) {
+        if ((t.status as string) === "open" || !t.status) t.status = "todo";
+      }
+      g.__ohState = { ...loaded, notifications: loaded.notifications ?? [], comments: loaded.comments ?? [] };
+    }
     hydrated = true;
   });
   await hydration;
@@ -205,6 +214,37 @@ export function notificationsFor(p: Principal): TicketNotification[] {
   return state().notifications.filter((n) => n.forPrincipalId === p.id);
 }
 
+/** Move a ticket across the board. Same scope as reassignment: your own
+ * tickets, or — for staff — your managed book's. */
+export function setTicketStatus(
+  id: string,
+  principalId: string,
+  toStatus: TicketStatus,
+): { ok: true; from: TicketStatus; ticket: Ticket } | { ok: false } {
+  const p = getPrincipal(principalId);
+  const t = p ? state().tickets.find((x) => x.id === id && inBookOf(p, x.createdBy)) : undefined;
+  if (!t) return { ok: false };
+  const from = t.status;
+  t.status = toStatus;
+  return { ok: true, from, ticket: t };
+}
+
+/** The ticket, if it is in this principal's visibility scope. */
+export function ticketInScopeOf(principalId: string, ticketId: string): Ticket | undefined {
+  const p = getPrincipal(principalId);
+  return p ? state().tickets.find((x) => x.id === ticketId && inBookOf(p, x.createdBy)) : undefined;
+}
+
+export function addComment(c: TicketComment): void {
+  state().comments.push(c);
+}
+
+/** Comments only for tickets the principal can see — scope rides the ticket. */
+export function commentsVisibleTo(p: Principal): TicketComment[] {
+  const visible = new Set(ticketsVisibleTo(p).map((t) => t.id));
+  return state().comments.filter((c) => visible.has(c.ticketId));
+}
+
 /* ---------------- Learned rules (M7) ---------------- */
 
 export function addLearnedRule(r: LearnedRule): void {
@@ -272,6 +312,7 @@ export function reset(): void {
   const s = state();
   s.tickets = [];
   s.notifications = [];
+  s.comments = [];
   s.audit = [];
   s.events = [];
   s.learnedRules = [];

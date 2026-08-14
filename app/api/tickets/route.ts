@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { correctTicket } from "@/lib/core/operations";
+import { commentOnTicket, correctTicket, progressTicket } from "@/lib/core/operations";
 import { normaliseTeam } from "@/lib/core/router";
 import {
   allPatientNames,
+  commentsVisibleTo,
   ensureHydrated,
   getPrincipal,
   learnedRules,
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     tickets: ticketsVisibleTo(principal),
     learnedRules: learnedRules(),
+    comments: commentsVisibleTo(principal),
     // Strictly addressed: only notifications FOR this principal, never the
     // board-wide feed.
     notifications: notificationsFor(principal),
@@ -36,13 +38,59 @@ export async function GET(req: NextRequest) {
  * learning fills the fallthrough gap; hand-rule territory only records. */
 export async function POST(req: NextRequest) {
   await ensureHydrated();
-  const body = (await req.json()) as { principalId?: string; ticketId?: string; team?: string };
+  const body = (await req.json()) as {
+    principalId?: string;
+    ticketId?: string;
+    team?: string;
+    status?: string;
+    comment?: string;
+  };
   const team = normaliseTeam(body.team);
   const principal = body.principalId ? getPrincipal(body.principalId) : undefined;
-  if (!principal || !body.ticketId || !team) {
-    return NextResponse.json({ error: "principalId, ticketId, team required" }, { status: 400 });
+  const STATUSES = ["todo", "in_progress", "done", "blocked"] as const;
+  const status = STATUSES.find((s) => s === body.status);
+
+  if (!principal || !body.ticketId || (!team && !status && !body.comment)) {
+    return NextResponse.json(
+      { error: "principalId, ticketId and a team, status or comment required" },
+      { status: 400 },
+    );
   }
-  const res = correctTicket(principal.id, body.ticketId, team, allPatientNames());
+
+  // Comment: scope rides the ticket (commenter must be able to see it).
+  if (body.comment) {
+    const res = commentOnTicket(body.principalId!, body.ticketId, body.comment);
+    if (!res.ok) {
+      return NextResponse.json({ error: "Ticket not found in your scope" }, { status: 404 });
+    }
+    await persistNow();
+    return NextResponse.json({
+      ok: true,
+      comment: res.comment,
+      tickets: ticketsVisibleTo(principal),
+      comments: commentsVisibleTo(principal),
+      learnedRules: learnedRules(),
+      notifications: notificationsFor(principal),
+    });
+  }
+
+  // Board move: workflow status only — no routing change, no learning.
+  if (status) {
+    const res = progressTicket(body.principalId!, body.ticketId, status);
+    if (!res.ok) {
+      return NextResponse.json({ error: "Ticket not found in your scope" }, { status: 404 });
+    }
+    await persistNow();
+    return NextResponse.json({
+      ok: true,
+      from: res.from,
+      to: status,
+      tickets: ticketsVisibleTo(principal),
+      learnedRules: learnedRules(),
+      notifications: notificationsFor(principal),
+    });
+  }
+  const res = correctTicket(principal.id, body.ticketId, team!, allPatientNames());
   if (!res.ok) {
     return NextResponse.json({ error: "Ticket not found in your scope" }, { status: 404 });
   }
