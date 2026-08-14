@@ -273,9 +273,16 @@ function inBookOf(p: Principal, actorId: string): boolean {
   return Boolean(dentistId && p.manages?.includes(dentistId));
 }
 
-/** Ticket visibility follows the same ownership shape as the audit log. */
+/** Ticket visibility follows the same ownership shape as the audit log —
+ * except internal tickets (reports on a session, e.g. denied-access
+ * escalations), which are hidden from the very principal they report on.
+ * Internal staff still see them. */
 export function ticketsVisibleTo(p: Principal): Ticket[] {
-  return state().tickets.filter((t) => inBookOf(p, t.createdBy));
+  return state().tickets.filter((t) => {
+    if (!inBookOf(p, t.createdBy)) return false;
+    if (t.internal && p.type !== "internal_staff") return false;
+    return true;
+  });
 }
 
 export function allTickets(): Ticket[] {
