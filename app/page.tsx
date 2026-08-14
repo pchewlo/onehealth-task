@@ -18,6 +18,12 @@ import type {
 let nonce = 0;
 const uid = () => `m_${Date.now()}_${nonce++}`;
 
+// Conversations are demo memory, not governed data: they only ever contain
+// what the layer already released to this browser, so localStorage is the
+// honest place for them — the server stays stateless.
+const CONVERSATIONS_KEY = "gal.conversations.v1";
+const CONV_IDS_KEY = "gal.convIds.v1";
+
 export default function Home() {
   const [principals, setPrincipals] = useState<UiPrincipal[]>([]);
   const [activeId, setActiveId] = useState<string>("U_D1");
@@ -43,6 +49,35 @@ export default function Home() {
       .then((r) => r.json())
       .then((j) => setPrincipals(j.principals ?? []));
   }, []);
+
+  // Restore past conversations after mount (not in the initializer — the
+  // server prerender has no localStorage, and diverging would break hydration).
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const c = localStorage.getItem(CONVERSATIONS_KEY);
+      if (c) setConversations(JSON.parse(c) as Record<string, UiMessage[]>);
+      const ids = localStorage.getItem(CONV_IDS_KEY);
+      if (ids) convIds.current = JSON.parse(ids) as Record<string, string>;
+    } catch {
+      // Corrupt or blocked storage — start fresh rather than crash the demo.
+    }
+    restored.current = true;
+  }, []);
+
+  const persistConvIds = () => {
+    try {
+      localStorage.setItem(CONV_IDS_KEY, JSON.stringify(convIds.current));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+      localStorage.setItem(CONV_IDS_KEY, JSON.stringify(convIds.current));
+    } catch {}
+  }, [conversations]);
 
   // Serverless-safe rails: GET polls may be answered by an instance that never
   // saw this session's writes, so responses that DID the writes (chat,
@@ -199,29 +234,44 @@ export default function Home() {
     refreshRails(activeId);
   };
 
+  // Close out a principal's conversation for the metrics stream, if it had turns.
+  const closeOutConversation = (pid: string) => {
+    const old = conversations[pid] ?? [];
+    if (old.length === 0) return;
+    const lastAssistant = [...old].reverse().find((m) => m.role === "assistant");
+    const thumbedDown = old.some((m) => m.feedback === "down");
+    const endedOnDenial = Boolean(
+      lastAssistant?.toolCalls?.length && lastAssistant.toolCalls.every((c) => !c.allowed),
+    );
+    const resolved = Boolean(lastAssistant && !lastAssistant.error && !thumbedDown && !endedOnDenial);
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "conversation_end",
+        principalId: pid,
+        conversationId: convId(pid),
+        resolved,
+        reason: resolved ? undefined : thumbedDown ? "bad_answer" : endedOnDenial ? "abandoned" : "confusion",
+      }),
+    });
+    delete convIds.current[pid];
+    persistConvIds();
+  };
+
+  // "Clear chat" for the signed-in user only: ends the conversation for the
+  // metrics stream, then forgets the messages (state + localStorage).
+  const clearChat = () => {
+    closeOutConversation(activeId);
+    setConversations((c) => {
+      const next = { ...c };
+      delete next[activeId];
+      return next;
+    });
+  };
+
   const switchPrincipal = async (id: string) => {
-    // Close out the old conversation for the metrics stream, if it had turns.
-    const old = conversations[activeId] ?? [];
-    if (old.length > 0) {
-      const lastAssistant = [...old].reverse().find((m) => m.role === "assistant");
-      const thumbedDown = old.some((m) => m.feedback === "down");
-      const endedOnDenial = Boolean(
-        lastAssistant?.toolCalls?.length && lastAssistant.toolCalls.every((c) => !c.allowed),
-      );
-      const resolved = Boolean(lastAssistant && !lastAssistant.error && !thumbedDown && !endedOnDenial);
-      fetch("/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "conversation_end",
-          principalId: activeId,
-          conversationId: convId(activeId),
-          resolved,
-          reason: resolved ? undefined : thumbedDown ? "bad_answer" : endedOnDenial ? "abandoned" : "confusion",
-        }),
-      });
-      delete convIds.current[activeId];
-    }
+    closeOutConversation(activeId);
     // The rails are scoped to the signed-in principal — clear before the new
     // scope's data arrives so one user's trail never lingers under another's.
     setAudit([]);
@@ -239,6 +289,10 @@ export default function Home() {
     await fetch("/api/reset", { method: "POST" });
     setConversations({});
     convIds.current = {};
+    try {
+      localStorage.removeItem(CONVERSATIONS_KEY);
+      localStorage.removeItem(CONV_IDS_KEY);
+    } catch {}
     setAudit([]);
     setTickets([]);
     setLearnedRules([]);
@@ -264,7 +318,16 @@ export default function Home() {
               The model proposes · the server decides
             </p>
           </div>
-          <nav className="ml-auto flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5">
+          {tab === "chat" && messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              title="Forget this user's conversation — it's closed out for metrics first. Reset demo clears every user's history."
+              className="ml-auto text-[11px] font-medium text-stone-400 transition hover:text-[var(--deny)]"
+            >
+              clear chat
+            </button>
+          )}
+          <nav className={`flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5 ${tab === "chat" && messages.length > 0 ? "" : "ml-auto"}`}>
             {(["chat", "tickets", "metrics"] as const).map((t) => (
               <button
                 key={t}

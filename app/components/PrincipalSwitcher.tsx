@@ -57,8 +57,8 @@ export function PrincipalSwitcher({
               </div>
               <div className="mt-1 text-[11.5px] leading-snug text-[var(--muted)]">
                 {p.title}
-                {p.manages && p.manages.length > 0 && (
-                  <span> · manages {p.manages.join(", ")}</span>
+                {(p.managesNames ?? p.manages) && (p.managesNames ?? p.manages)!.length > 0 && (
+                  <span> · manages {(p.managesNames ?? p.manages)!.join(", ")}</span>
                 )}
               </div>
             </button>

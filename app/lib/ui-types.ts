@@ -6,6 +6,8 @@ export interface UiPrincipal {
   name: string;
   title: string;
   manages?: string[];
+  /** Managed dentists resolved to practice display names. */
+  managesNames?: string[];
 }
 
 export interface UiToolCall {

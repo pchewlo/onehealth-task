@@ -18,6 +18,8 @@ export interface Principal {
   manages?: string[];
   /** dentist → their own dentistId */
   dentistId?: string;
+  /** dentist → their practice's display name */
+  practice?: string;
   /** patient → their own patientId */
   patientId?: string;
 }
