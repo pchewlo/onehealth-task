@@ -9,6 +9,24 @@ import {
   type UiToolCall,
 } from "../lib/ui-types";
 
+/** Markdown-lite: bold and inline code, which is all the model emits here.
+ * Newlines are preserved by the surrounding whitespace-pre-wrap. */
+function mdLite(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**")) {
+      return <strong key={i}>{p.slice(2, -2)}</strong>;
+    }
+    if (p.startsWith("`") && p.endsWith("`")) {
+      return (
+        <code key={i} className="rounded bg-stone-100 px-1 py-px font-mono text-[12px]">
+          {p.slice(1, -1)}
+        </code>
+      );
+    }
+    return p;
+  });
+}
+
 function ToolChip({ c }: { c: UiToolCall }) {
   const argsSummary = summariseArgs(c.args);
   return (
@@ -130,7 +148,7 @@ export function Chat({
                       : "border-[var(--line)] bg-white"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{m.content}</div>
+                  <div className="whitespace-pre-wrap">{mdLite(m.content)}</div>
 
                   {m.toolCalls?.some((c) => !c.allowed) && (
                     <div className="mt-2.5 space-y-1">

@@ -123,7 +123,9 @@ function matchHandRule(text: string): { team: Team; keyword: string } | null {
   let bestIndex = Number.MAX_SAFE_INTEGER;
   for (const rule of HAND_RULES) {
     for (const kw of rule.keywords) {
-      const i = text.indexOf(kw);
+      // Word-boundary match, not substring: "lab" must not fire inside
+      // "available", "fit" inside "outfit", "pain" inside "paint".
+      const i = text.search(new RegExp(`\\b${escapeRegex(kw)}\\b`));
       if (i !== -1 && i < bestIndex) {
         bestIndex = i;
         best = { team: rule.team, keyword: kw };
@@ -131,6 +133,10 @@ function matchHandRule(text: string): { team: Team; keyword: string } | null {
     }
   }
   return best;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function matchLearnedRule(subject: string, text: string): LearnedRule | null {
@@ -143,7 +149,9 @@ function matchLearnedRule(subject: string, text: string): LearnedRule | null {
     // for single-token rules) appear in the new ticket. Ship beats elegant —
     // and test 10 asserts the crude version still cannot touch hand-rule
     // territory, because precedence keeps it out entirely.
-    const hits = rule.tokens.filter((t) => text.includes(t)).length;
+    const hits = rule.tokens.filter((t) =>
+      new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text),
+    ).length;
     const needed = Math.min(2, rule.tokens.length);
     if (hits >= needed && needed > 0) return rule;
   }

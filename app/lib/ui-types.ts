@@ -87,12 +87,12 @@ export const CHIPS: Record<string, Chip[]> = {
     },
     {
       label: "📚 Teach the router ①: the bait",
-      text: "Raise a ticket titled exactly 'Track and trace shows no movement for John A's box' for the support team — that's all the detail I have.",
+      text: "Raise a ticket titled exactly 'Track and trace shows no movement for John A's box' for the support team. Use exactly 'No details available yet.' as the body — do not add anything else to it.",
       kind: "learn1",
     },
     {
       label: "📚 Teach the router ②: the probe",
-      text: "Now raise one titled exactly 'Track and trace shows no movement for Mary B's box' — same issue again.",
+      text: "Now raise one titled exactly 'Track and trace shows no movement for Mary B's box', body exactly 'No details available yet.' — same issue again.",
       kind: "learn2",
     },
   ],
