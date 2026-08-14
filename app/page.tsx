@@ -10,6 +10,7 @@ import type {
   UiAuditEntry,
   UiLearnedRule,
   UiMessage,
+  UiNotification,
   UiPrincipal,
   UiTicket,
   UiToolCall,
@@ -36,6 +37,8 @@ export default function Home() {
   const [tickets, setTickets] = useState<UiTicket[]>([]);
   const [learnedRules, setLearnedRules] = useState<UiLearnedRule[]>([]);
   const [correctionNote, setCorrectionNote] = useState<CorrectionNote | null>(null);
+  const [focusTicketId, setFocusTicketId] = useState<string | null>(null);
+  const seenNotifs = useRef<Set<string>>(new Set());
 
   // One conversation id per principal per page load — feeds the metric events.
   const convIds = useRef<Record<string, string>>({});
@@ -59,6 +62,8 @@ export default function Home() {
       if (c) setConversations(JSON.parse(c) as Record<string, UiMessage[]>);
       const ids = localStorage.getItem(CONV_IDS_KEY);
       if (ids) convIds.current = JSON.parse(ids) as Record<string, string>;
+      const seen = localStorage.getItem("gal.seenNotifs.v1");
+      if (seen) seenNotifs.current = new Set(JSON.parse(seen) as string[]);
     } catch {
       // Corrupt or blocked storage — start fresh rather than crash the demo.
     }
@@ -114,6 +119,37 @@ export default function Home() {
     [],
   );
 
+  // Board updates for tickets this user raised, delivered into their chat.
+  // Server already scopes by addressee; the client re-checks before injecting
+  // so a mis-routed payload could still never land in the wrong thread.
+  const ingestNotifications = useCallback((incoming: UiNotification[] | undefined) => {
+    if (!incoming?.length) return;
+    const fresh = incoming.filter(
+      (n) => !seenNotifs.current.has(n.id),
+    );
+    if (!fresh.length) return;
+    for (const n of fresh) seenNotifs.current.add(n.id);
+    try {
+      localStorage.setItem("gal.seenNotifs.v1", JSON.stringify([...seenNotifs.current]));
+    } catch {}
+    setConversations((c) => {
+      const next = { ...c };
+      for (const n of fresh) {
+        const msg: UiMessage = {
+          id: `notice_${n.id}`,
+          role: "assistant",
+          content: `${n.byName} moved your ticket ${n.ticketId} ("${n.subject}") from ${n.fromTeam} to ${n.toTeam}.`,
+          notice: { ticketId: n.ticketId, fromTeam: n.fromTeam, toTeam: n.toTeam, byName: n.byName },
+        };
+        const thread = next[n.forPrincipalId] ?? [];
+        if (!thread.some((m) => m.id === msg.id)) {
+          next[n.forPrincipalId] = [...thread, msg];
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const refreshRails = useCallback(
     async (pid: string) => {
       const [a, t] = await Promise.all([
@@ -122,8 +158,9 @@ export default function Home() {
       ]);
       mergeAudit(a.audit);
       mergeTickets(t.tickets, t.learnedRules);
+      ingestNotifications(t.notifications);
     },
-    [mergeAudit, mergeTickets],
+    [mergeAudit, mergeTickets, ingestNotifications],
   );
 
   useEffect(() => {
@@ -134,11 +171,16 @@ export default function Home() {
 
   const active = principals.find((p) => p.id === activeId);
   const messages = conversations[activeId] ?? [];
-  // Patients get the chat and nothing else — tickets, audit and metrics are
-  // back-office surfaces. Same spirit as the API scoping: the view shows only
-  // what this user is meant to see.
+  // Views mirror the scoping story: patients get the chat and nothing else,
+  // dentists add their own tickets, and only internal staff see the metrics
+  // dashboard — it's a business-wide view, not a per-practice one.
   const isPatient = active?.type === "patient";
-  const tabs = isPatient ? (["chat"] as const) : (["chat", "tickets", "metrics"] as const);
+  const isStaff = active?.type === "internal_staff";
+  const tabs = isPatient
+    ? (["chat"] as const)
+    : isStaff
+      ? (["chat", "tickets", "metrics"] as const)
+      : (["chat", "tickets"] as const);
 
   const send = async (text: string) => {
     const userMsg: UiMessage = { id: uid(), role: "user", content: text };
@@ -176,6 +218,7 @@ export default function Home() {
       // Same-instance snapshots piggybacked on the response (serverless-safe).
       mergeAudit(j.audit);
       mergeTickets(j.tickets, j.learnedRules);
+      ingestNotifications(j.notifications);
     } catch (e) {
       const err: UiMessage = {
         id: uid(),
@@ -205,6 +248,12 @@ export default function Home() {
         rating,
       }),
     });
+  };
+
+  const openTicket = (ticketId: string) => {
+    setFocusTicketId(ticketId);
+    setTab("tickets");
+    setTimeout(() => setFocusTicketId((f) => (f === ticketId ? null : f)), 6000);
   };
 
   const reassign = async (ticketId: string, team: string) => {
@@ -359,15 +408,17 @@ export default function Home() {
             keyMissing={keyMissing}
             onSend={send}
             onFeedback={feedback}
+            onOpenTicket={openTicket}
           />
         ) : tab === "tickets" && active && !isPatient ? (
           <TicketBoard
             principal={active}
             tickets={tickets}
             note={correctionNote}
+            focusTicketId={focusTicketId}
             onReassign={reassign}
           />
-        ) : tab === "metrics" && !isPatient ? (
+        ) : tab === "metrics" && isStaff ? (
           <MetricsTab keyMissing={keyMissing} />
         ) : (
           <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--muted)]">

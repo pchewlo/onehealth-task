@@ -9,8 +9,8 @@ import {
   type UiToolCall,
 } from "../lib/ui-types";
 
-/** Markdown-lite: bold and inline code, which is all the model emits here.
- * Newlines are preserved by the surrounding whitespace-pre-wrap. */
+/** Markdown-lite: bold, inline code and pipe tables — the model emits nothing
+ * fancier here. Newlines are preserved by the surrounding whitespace-pre-wrap. */
 function mdLite(text: string): React.ReactNode[] {
   return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((p, i) => {
     if (p.startsWith("**") && p.endsWith("**")) {
@@ -25,6 +25,73 @@ function mdLite(text: string): React.ReactNode[] {
     }
     return p;
   });
+}
+
+const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s);
+const isTableDivider = (s: string) => /^\s*\|[\s:|-]+\|\s*$/.test(s);
+const splitRow = (s: string) =>
+  s
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+
+/** Message body renderer: pipe-table blocks become real tables, everything
+ * around them goes through mdLite. */
+function renderContent(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  const out: React.ReactNode[] = [];
+  let buf: string[] = [];
+  const flushText = () => {
+    const chunk = buf.join("\n").replace(/^\n+|\n+$/g, "");
+    if (chunk) out.push(<span key={`t${out.length}`}>{mdLite(chunk)}</span>);
+    buf = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    if (isTableRow(lines[i]) && isTableDivider(lines[i + 1] ?? "")) {
+      flushText();
+      const header = splitRow(lines[i]);
+      i += 1; // skip the divider
+      const rows: string[][] = [];
+      while (i + 1 < lines.length && isTableRow(lines[i + 1]) && !isTableDivider(lines[i + 1])) {
+        rows.push(splitRow(lines[++i]));
+      }
+      out.push(
+        <div key={`table${out.length}`} className="my-2 overflow-x-auto whitespace-normal">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead>
+              <tr>
+                {header.map((h, j) => (
+                  <th
+                    key={j}
+                    className="border border-[var(--line)] bg-stone-50 px-2.5 py-1.5 text-left font-semibold"
+                  >
+                    {mdLite(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, j) => (
+                <tr key={j}>
+                  {header.map((_, k) => (
+                    <td key={k} className="border border-[var(--line)] px-2.5 py-1.5">
+                      {mdLite(r[k] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+    } else {
+      buf.push(lines[i]);
+    }
+  }
+  flushText();
+  return out;
 }
 
 function ToolChip({ c }: { c: UiToolCall }) {
@@ -91,6 +158,7 @@ export function Chat({
   keyMissing,
   onSend,
   onFeedback,
+  onOpenTicket,
 }: {
   principal: UiPrincipal;
   messages: UiMessage[];
@@ -98,6 +166,7 @@ export function Chat({
   keyMissing: boolean;
   onSend: (text: string) => void;
   onFeedback: (messageId: string, rating: "up" | "down") => void;
+  onOpenTicket: (ticketId: string) => void;
 }) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,6 +209,21 @@ export function Chat({
                 <div className="rounded-2xl rounded-br-md bg-[var(--accent)] px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
                   {m.content}
                 </div>
+              ) : m.notice ? (
+                // Board update for a ticket this user raised — injected by the
+                // app, not spoken by the model, and styled so the difference
+                // is visible.
+                <button
+                  onClick={() => onOpenTicket(m.notice!.ticketId)}
+                  title="Open on the ticket board"
+                  className="block w-full rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-left text-[12.5px] leading-relaxed text-indigo-900 shadow-sm transition hover:border-indigo-400"
+                >
+                  <span className="mr-1.5">📣</span>
+                  {m.content}{" "}
+                  <span className="ml-1 text-[11px] font-medium text-indigo-500">
+                    View on board →
+                  </span>
+                </button>
               ) : (
                 <div
                   className={`rounded-2xl rounded-bl-md border px-4 py-3 text-[13.5px] leading-relaxed shadow-sm ${
@@ -148,7 +232,7 @@ export function Chat({
                       : "border-[var(--line)] bg-white"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{mdLite(m.content)}</div>
+                  <div className="whitespace-pre-wrap">{renderContent(m.content)}</div>
 
                   {m.toolCalls?.some((c) => !c.allowed) && (
                     <div className="mt-2.5 space-y-1">
@@ -167,9 +251,11 @@ export function Chat({
                   )}
 
                   {m.tickets?.map((t) => (
-                    <div
+                    <button
                       key={t.id}
-                      className="mt-2.5 rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5"
+                      onClick={() => onOpenTicket(t.id)}
+                      title="Open on the ticket board"
+                      className="group mt-2.5 block w-full rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5 text-left transition hover:border-[var(--accent)] hover:bg-white"
                     >
                       <div className="flex items-center gap-2">
                         <span
@@ -185,7 +271,10 @@ export function Chat({
                       <div className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
                         {t.routingReason}
                       </div>
-                    </div>
+                      <div className="mt-1 text-[10.5px] font-medium text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
+                        View on board →
+                      </div>
+                    </button>
                   ))}
 
                   {m.toolCalls && <ToolStrip calls={m.toolCalls} />}

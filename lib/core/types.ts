@@ -83,6 +83,25 @@ export interface LearnedRule {
   createdAt: string;
 }
 
+/**
+ * A live update about someone's ticket, delivered only to its creator.
+ * Carries nothing the creator cannot already see: their own ticket's subject
+ * and teams, plus the display name of the person who moved it (names are
+ * switcher-grade metadata, not restricted data).
+ */
+export interface TicketNotification {
+  id: string;
+  ts: string;
+  /** The only principal allowed to receive it — the ticket's creator. */
+  forPrincipalId: string;
+  ticketId: string;
+  subject: string;
+  fromTeam: Team;
+  toTeam: Team;
+  /** Display name of who moved it, resolved server-side. */
+  byName: string;
+}
+
 export interface AuditEntry {
   id: string;
   ts: string;

@@ -4,10 +4,12 @@ import { project, projectMany } from "./redact";
 import { extractTokens, isLearnable, resolveTeam } from "./router";
 import {
   addLearnedRule,
+  addNotification,
   addTicket,
   appendEvent,
   casesForDentists,
   casesForPatient,
+  getPrincipal,
   nextId,
   patientsById,
   patientsForDentists,
@@ -16,7 +18,7 @@ import {
   reassignTicket,
   retireLearnedRule,
   searchKb,
-  ticketsBy,
+  ticketsVisibleTo,
 } from "./store";
 import type { Decision, LearnedRule, Principal, Team, Ticket } from "./types";
 
@@ -284,7 +286,9 @@ export function listMyTickets(p: Principal): OpResult {
     record(p, "list_my_tickets", {}, d, t0);
     return denied(d);
   }
-  const rows = ticketsBy(p.id) as unknown as Record<string, unknown>[];
+  // Same ownership shape as the UI and the audit log: own tickets, plus a
+  // managed book's for internal staff.
+  const rows = ticketsVisibleTo(p) as unknown as Record<string, unknown>[];
   record(p, "list_my_tickets", {}, ALLOW, t0);
   return { ok: true, data: { tickets: projectMany("ticket", p.type, rows), count: rows.length } };
 }
@@ -321,6 +325,24 @@ export function correctTicket(
   const res = reassignTicket(ticketId, principalId, toTeam);
   if (!res.ok) return { ok: false };
   const t = res.ticket;
+
+  // Live update for the ticket's creator — and only them. reassignTicket has
+  // already established the actor is allowed to touch this ticket (visibility
+  // scope), and the notification carries nothing the creator can't already
+  // see: their own ticket plus the mover's display name. Self-moves are
+  // silent — you don't need to be told what you just did.
+  if (t.createdBy !== principalId && res.from !== toTeam) {
+    addNotification({
+      id: nextId("N"),
+      ts: new Date().toISOString(),
+      forPrincipalId: t.createdBy,
+      ticketId: t.id,
+      subject: t.subject,
+      fromTeam: res.from,
+      toTeam,
+      byName: getPrincipal(principalId)?.name ?? "someone",
+    });
+  }
 
   appendEvent({
     id: nextId("ev"),

@@ -58,6 +58,19 @@ export interface UiMessage {
   tickets?: UiTicket[];
   feedback?: "up" | "down";
   error?: boolean;
+  /** A board-update notice injected into the creator's thread (not model output). */
+  notice?: { ticketId: string; fromTeam: string; toTeam: string; byName: string };
+}
+
+export interface UiNotification {
+  id: string;
+  ts: string;
+  forPrincipalId: string;
+  ticketId: string;
+  subject: string;
+  fromTeam: string;
+  toTeam: string;
+  byName: string;
 }
 
 export interface UiAuditEntry {

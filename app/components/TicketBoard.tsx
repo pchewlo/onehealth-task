@@ -21,11 +21,14 @@ export function TicketBoard({
   principal,
   tickets,
   note,
+  focusTicketId,
   onReassign,
 }: {
   principal: UiPrincipal;
   tickets: UiTicket[];
   note: CorrectionNote | null;
+  /** Ticket to highlight + scroll to (arriving from a chat link). */
+  focusTicketId: string | null;
   onReassign: (ticketId: string, team: string) => void;
 }) {
   return (
@@ -33,8 +36,10 @@ export function TicketBoard({
       <div className="flex items-baseline gap-2 px-6 pb-1 pt-4">
         <h2 className="text-[13px] font-semibold">{principal.name}&rsquo;s tickets</h2>
         <span className="text-[11px] text-[var(--muted)]">
-          scoped to this principal · move a card to correct its team — every move is training
-          signal for the router
+          {principal.type === "internal_staff"
+            ? "their own plus their managed practices' tickets"
+            : "scoped to this principal"}{" "}
+          · move a card to correct its team — every move is training signal for the router
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-6 pb-5 pt-2">
@@ -62,7 +67,16 @@ export function TicketBoard({
                 {cards.map((t) => (
                   <div
                     key={t.id}
-                    className="fade-up rounded-lg border border-[var(--line)] bg-white px-2.5 py-2"
+                    ref={(el) => {
+                      if (el && t.id === focusTicketId) {
+                        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                      }
+                    }}
+                    className={`fade-up rounded-lg border bg-white px-2.5 py-2 transition-shadow ${
+                      t.id === focusTicketId
+                        ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]"
+                        : "border-[var(--line)]"
+                    }`}
                   >
                     <div className="text-[11.5px] font-medium leading-snug" title={t.subject}>
                       {t.subject}

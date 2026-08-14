@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fixtures from "@/fixtures/traffic.json";
 import { runAgent } from "@/lib/agent/loop";
-import { appendEvent, nextId } from "@/lib/core/store";
+import { appendEvent, ensureHydrated, nextId, persistNow } from "@/lib/core/store";
 
 export const maxDuration = 300;
 
@@ -38,6 +38,7 @@ export async function POST() {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 503 });
   }
 
+  await ensureHydrated();
   const results: SimResult[] = [];
 
   for (const f of fixtures as Fixture[]) {
@@ -84,6 +85,7 @@ export async function POST() {
     });
   }
 
+  await persistNow();
   const passed = results.filter((r) => r.pass).length;
   return NextResponse.json({ results, passed, total: results.length });
 }

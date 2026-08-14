@@ -48,7 +48,8 @@ The safety property is the architecture, and it is asserted, not asserted-about:
 
 - **Single Next.js app, not a pnpm workspace with stdio MCP + Express.** Vercel's serverless runtime has no persistent processes or writable disk, so the MCP server runs over the SDK's in-memory transport, constructed per request around the resolved principal. Same binding property, same place in the architecture; `lib/core` is unchanged either way.
 - **`claude-sonnet-5`, not `claude-sonnet-4-6`** — superseded model. `temperature` is rejected on current models and therefore omitted.
-- **In-memory state, not JSON files on disk** — serverless again. Tickets/audit/events live in a process global; on Vercel they reset on cold start (the Reset button makes this a feature for demos). The store is one file with a deliberate Postgres-shaped seam.
+- **In-memory state, not JSON files on disk** — serverless again. Tickets/audit/events live in a process global; without further config they reset on cold start (the Reset button makes this a feature for demos). The store is one file with a deliberate Postgres-shaped seam — and that seam now has an optional first tenant: set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (after running `supabase/schema.sql` once) and the whole mutable state persists to a single Supabase JSONB row, written after each mutating request. Demo-grade on purpose: last write wins; production would be per-entity tables + RLS.
+- **Ticket visibility follows the audit log's ownership shape**: everyone sees the tickets they raised; internal staff additionally see (and may reassign) tickets raised by the dentists they manage and those dentists' patients. An account manager correcting a managed ticket feeds the same router-learning loop.
 
 ## Hardening for production (deliberately not built)
 

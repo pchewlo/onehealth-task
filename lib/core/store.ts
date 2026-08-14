@@ -1,4 +1,5 @@
 import seed from "../../data/seed.json";
+import { loadState, saveState } from "./persist";
 import type {
   AuditEntry,
   CaseRecord,
@@ -8,6 +9,7 @@ import type {
   PatientRecord,
   Principal,
   Ticket,
+  TicketNotification,
 } from "./types";
 
 /**
@@ -25,8 +27,9 @@ import type {
  * authorize() is.
  */
 
-interface MutableState {
+export interface MutableState {
   tickets: Ticket[];
+  notifications: TicketNotification[];
   audit: AuditEntry[];
   events: MetricEvent[];
   learnedRules: LearnedRule[];
@@ -38,9 +41,36 @@ const g = globalThis as unknown as { __ohState?: MutableState };
 
 function state(): MutableState {
   if (!g.__ohState) {
-    g.__ohState = { tickets: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
+    g.__ohState = { tickets: [], notifications: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
   }
   return g.__ohState;
+}
+
+/* ---------------- Durability (optional Supabase, see persist.ts) ----------------
+ *
+ * The in-memory state above stays the single source of truth for a running
+ * process — everything in the layer remains synchronous. Durability is bolted
+ * on at the edges: API routes await ensureHydrated() before touching state and
+ * persistNow() after mutating it. With no Supabase credentials both are no-ops
+ * and the store behaves exactly as before (prove.ts stays keyless).
+ */
+
+let hydrated = false;
+let hydration: Promise<void> | null = null;
+
+export async function ensureHydrated(): Promise<void> {
+  if (hydrated) return;
+  hydration ??= loadState().then((loaded) => {
+    // Only adopt the remote snapshot on a cold store — a process that already
+    // has writes in memory is newer than what it last flushed.
+    if (loaded && !g.__ohState) g.__ohState = { ...loaded, notifications: loaded.notifications ?? [] };
+    hydrated = true;
+  });
+  await hydration;
+}
+
+export async function persistNow(): Promise<void> {
+  await saveState(state());
 }
 
 export function nextId(prefix: string): string {
@@ -115,6 +145,27 @@ export function ticketsBy(principalId: string): Ticket[] {
   return state().tickets.filter((t) => t.createdBy === principalId);
 }
 
+/**
+ * Ownership shape shared by tickets and audit: you always see your own;
+ * internal staff additionally see actors attached to the dentists they manage
+ * (the dentists themselves, and those dentists' patients). Fail closed —
+ * unknown actors are nobody's.
+ */
+function inBookOf(p: Principal, actorId: string): boolean {
+  if (actorId === p.id) return true;
+  if (p.type !== "internal_staff") return false;
+  const actor = getPrincipal(actorId);
+  if (!actor) return false;
+  const dentistId =
+    actor.dentistId ?? (actor.patientId ? rawPatient(actor.patientId)?.dentistId : undefined);
+  return Boolean(dentistId && p.manages?.includes(dentistId));
+}
+
+/** Ticket visibility follows the same ownership shape as the audit log. */
+export function ticketsVisibleTo(p: Principal): Ticket[] {
+  return state().tickets.filter((t) => inBookOf(p, t.createdBy));
+}
+
 export function allTickets(): Ticket[] {
   return state().tickets;
 }
@@ -124,12 +175,34 @@ export function reassignTicket(
   principalId: string,
   toTeam: Ticket["team"],
 ): { ok: true; from: Ticket["team"]; ticket: Ticket } | { ok: false } {
-  const t = state().tickets.find((x) => x.id === id && x.createdBy === principalId);
+  // Reassignment scope = visibility scope: an account manager correcting a
+  // managed dentist's ticket is exactly the correction signal the router
+  // learns from.
+  const p = getPrincipal(principalId);
+  const t = p ? state().tickets.find((x) => x.id === id && inBookOf(p, x.createdBy)) : undefined;
   if (!t) return { ok: false };
   const from = t.team;
   t.team = toTeam;
   t.routingReason = `${t.routingReason} · reassigned by human to ${toTeam}`;
   return { ok: true, from, ticket: t };
+}
+
+/* ---------------- Ticket notifications ---------------- */
+
+/**
+ * Delivery is scoped harder than visibility: a notification is addressed to
+ * exactly one principal (the ticket's creator) and notificationsFor() returns
+ * only that principal's. Staff already see the board move; the creator is the
+ * one who was elsewhere when it happened.
+ */
+export function addNotification(n: TicketNotification): void {
+  const s = state();
+  s.notifications.unshift(n);
+  if (s.notifications.length > 100) s.notifications.length = 100;
+}
+
+export function notificationsFor(p: Principal): TicketNotification[] {
+  return state().notifications.filter((n) => n.forPrincipalId === p.id);
 }
 
 /* ---------------- Learned rules (M7) ---------------- */
@@ -198,6 +271,7 @@ export function isBackfilled(): boolean {
 export function reset(): void {
   const s = state();
   s.tickets = [];
+  s.notifications = [];
   s.audit = [];
   s.events = [];
   s.learnedRules = [];

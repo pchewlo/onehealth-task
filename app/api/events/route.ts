@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendEvent, nextId } from "@/lib/core/store";
+import { appendEvent, ensureHydrated, nextId, persistNow } from "@/lib/core/store";
 import type { UnresolvedReason } from "@/lib/core/types";
 
 /** Feedback (👍/👎) and conversation_end events from the UI. */
 export async function POST(req: NextRequest) {
+  await ensureHydrated();
   const body = (await req.json()) as {
     type?: "feedback" | "conversation_end";
     principalId?: string;
@@ -28,5 +29,6 @@ export async function POST(req: NextRequest) {
     resolved: body.resolved,
     reason: body.reason,
   });
+  await persistNow();
   return NextResponse.json({ ok: true });
 }

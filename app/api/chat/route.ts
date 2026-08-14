@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgent, type ChatMessage } from "@/lib/agent/loop";
-import { auditVisibleTo, getPrincipal, learnedRules, ticketsBy } from "@/lib/core/store";
+import {
+  auditVisibleTo,
+  ensureHydrated,
+  getPrincipal,
+  learnedRules,
+  notificationsFor,
+  persistNow,
+  ticketsVisibleTo,
+} from "@/lib/core/store";
 
 export const maxDuration = 60;
 
@@ -20,6 +28,7 @@ export async function POST(req: NextRequest) {
         { status: 503 },
       );
     }
+    await ensureHydrated();
     const result = await runAgent({
       principalId: body.principalId,
       messages: body.messages,
@@ -32,11 +41,13 @@ export async function POST(req: NextRequest) {
     // the client merges from here and the UI stays truthful regardless of
     // which lambda answers the polls.
     const principal = getPrincipal(body.principalId)!;
+    await persistNow();
     return NextResponse.json({
       ...result,
       audit: auditVisibleTo(principal, 60),
-      tickets: ticketsBy(body.principalId),
+      tickets: ticketsVisibleTo(principal),
       learnedRules: learnedRules(),
+      notifications: notificationsFor(principal),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

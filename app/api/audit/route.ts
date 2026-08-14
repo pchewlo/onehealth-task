@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auditVisibleTo, getPrincipal } from "@/lib/core/store";
+import { auditVisibleTo, ensureHydrated, getPrincipal } from "@/lib/core/store";
 
 export async function GET(req: NextRequest) {
+  await ensureHydrated();
   const principalId = req.nextUrl.searchParams.get("principalId");
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? 60), 200);
   const principal = principalId ? getPrincipal(principalId) : undefined;
