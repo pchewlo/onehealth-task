@@ -192,7 +192,6 @@ export function Chat({
   busy,
   keyMissing,
   onSend,
-  onFeedback,
   onResolve,
   onOpenTicket,
 }: {
@@ -201,7 +200,6 @@ export function Chat({
   busy: boolean;
   keyMissing: boolean;
   onSend: (text: string) => void;
-  onFeedback: (messageId: string, rating: "up" | "down") => void;
   onResolve: (messageId: string, verdict: "yes" | "bad_answer" | "confusion") => void;
   onOpenTicket: (ticketId: string) => void;
 }) {
@@ -362,33 +360,9 @@ export function Chat({
 
                   {m.toolCalls && <ToolStrip calls={m.toolCalls} />}
 
-                  {m.error && stamp(m.ts) && (
-                    <div className="mt-1 text-[10px] tabular-nums text-stone-400">{stamp(m.ts)}</div>
-                  )}
-                  {!m.error && (
-                    <div className="mt-2 flex items-center gap-1.5">
-                      {(["up", "down"] as const).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => onFeedback(m.id, r)}
-                          disabled={Boolean(m.feedback)}
-                          className={`rounded-md px-1.5 py-0.5 text-[13px] transition ${
-                            m.feedback === r
-                              ? "bg-stone-200"
-                              : m.feedback
-                                ? "opacity-25"
-                                : "opacity-40 hover:bg-stone-100 hover:opacity-100"
-                          }`}
-                          title={r === "up" ? "Helpful" : "Not helpful"}
-                        >
-                          {r === "up" ? "👍" : "👎"}
-                        </button>
-                      ))}
-                      {stamp(m.ts) && (
-                        <span className="ml-auto text-[10px] tabular-nums text-stone-400">
-                          {stamp(m.ts)}
-                        </span>
-                      )}
+                  {stamp(m.ts) && (
+                    <div className="mt-1.5 text-right text-[10px] tabular-nums text-stone-400">
+                      {stamp(m.ts)}
                     </div>
                   )}
                 </div>

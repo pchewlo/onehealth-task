@@ -288,8 +288,6 @@ export default function Home() {
       if (!last || last.error) return "Nothing to close yet — send a message and get a reply first.";
       if (thread.some((m) => m.resolveAsk && !m.resolveAnswer)) return "The prompt is already showing.";
       if (askedConvs.current.has(conv)) return "Already asked for this conversation.";
-      // Organic timer defers to explicit 👍/👎; the dev trigger overrides it.
-      if (last.feedback && !opts?.force) return "Feedback already given on the last reply.";
       askedConvs.current.add(conv);
       setConversations((c) => ({
         ...c,
@@ -340,24 +338,6 @@ export default function Home() {
     // The conversation is closed; the next message starts a new one.
     delete convIds.current[activeId];
     persistConvIds();
-  };
-
-  const feedback = async (messageId: string, rating: "up" | "down") => {
-    cancelIdleAsk();
-    setConversations((c) => ({
-      ...c,
-      [activeId]: (c[activeId] ?? []).map((m) => (m.id === messageId ? { ...m, feedback: rating } : m)),
-    }));
-    await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "feedback",
-        principalId: activeId,
-        conversationId: convId(activeId),
-        rating,
-      }),
-    });
   };
 
   const openTicket = (ticketId: string) => {
@@ -576,7 +556,6 @@ export default function Home() {
             busy={busy}
             keyMissing={keyMissing}
             onSend={send}
-            onFeedback={feedback}
             onResolve={answerResolve}
             onOpenTicket={openTicket}
           />
