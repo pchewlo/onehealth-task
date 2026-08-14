@@ -8,6 +8,10 @@ export interface UiPrincipal {
   manages?: string[];
   /** Managed dentists resolved to practice display names. */
   managesNames?: string[];
+  /** patient → the practice their dentist belongs to */
+  practice?: string;
+  /** hierarchy only: a dentist's own id, or a patient's dentist's id */
+  dentistId?: string;
 }
 
 export interface UiToolCall {

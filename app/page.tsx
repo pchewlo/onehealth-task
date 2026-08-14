@@ -134,6 +134,11 @@ export default function Home() {
 
   const active = principals.find((p) => p.id === activeId);
   const messages = conversations[activeId] ?? [];
+  // Patients get the chat and nothing else — tickets, audit and metrics are
+  // back-office surfaces. Same spirit as the API scoping: the view shows only
+  // what this user is meant to see.
+  const isPatient = active?.type === "patient";
+  const tabs = isPatient ? (["chat"] as const) : (["chat", "tickets", "metrics"] as const);
 
   const send = async (text: string) => {
     const userMsg: UiMessage = { id: uid(), role: "user", content: text };
@@ -280,8 +285,10 @@ export default function Home() {
     setCorrectionNote(null);
     setActiveId(id);
     // The tickets board is per-principal, so keep it open while clicking
-    // through users; only metrics (a global view) snaps back to chat.
-    if (tab === "metrics") setTab("chat");
+    // through users; metrics (a global view) snaps back to chat, and a
+    // patient only has chat at all.
+    const target = principals.find((p) => p.id === id);
+    if (tab === "metrics" || target?.type === "patient") setTab("chat");
   };
 
   const resetDemo = async () => {
@@ -327,8 +334,10 @@ export default function Home() {
               clear chat
             </button>
           )}
-          <nav className={`flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5 ${tab === "chat" && messages.length > 0 ? "" : "ml-auto"}`}>
-            {(["chat", "tickets", "metrics"] as const).map((t) => (
+          <nav
+            className={`flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5 ${tab === "chat" && messages.length > 0 ? "" : "ml-auto"} ${tabs.length === 1 ? "invisible" : ""}`}
+          >
+            {tabs.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -351,14 +360,14 @@ export default function Home() {
             onSend={send}
             onFeedback={feedback}
           />
-        ) : tab === "tickets" && active ? (
+        ) : tab === "tickets" && active && !isPatient ? (
           <TicketBoard
             principal={active}
             tickets={tickets}
             note={correctionNote}
             onReassign={reassign}
           />
-        ) : tab === "metrics" ? (
+        ) : tab === "metrics" && !isPatient ? (
           <MetricsTab keyMissing={keyMissing} />
         ) : (
           <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--muted)]">
@@ -367,7 +376,7 @@ export default function Home() {
         )}
       </main>
 
-      {tab === "chat" && (
+      {tab === "chat" && !isPatient && (
         <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-[var(--line)] bg-white/60">
           <AuditLog
             entries={audit}
