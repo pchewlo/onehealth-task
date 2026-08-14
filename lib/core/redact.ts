@@ -28,7 +28,7 @@ const ALLOWLIST: Record<ResourceKind, Partial<Record<PrincipalType | "any", read
   },
 } as const;
 
-export function project<T extends Record<string, unknown>>(
+export function project<T extends object>(
   kind: ResourceKind,
   principalType: PrincipalType,
   record: T,
@@ -39,14 +39,15 @@ export function project<T extends Record<string, unknown>>(
     // No allowlist defined → return nothing rather than everything.
     return {};
   }
+  const raw = record as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const f of fields) {
-    if (f in record) out[f] = record[f as keyof T];
+    if (f in raw) out[f] = raw[f];
   }
   return out;
 }
 
-export function projectMany<T extends Record<string, unknown>>(
+export function projectMany<T extends object>(
   kind: ResourceKind,
   principalType: PrincipalType,
   records: readonly T[],
