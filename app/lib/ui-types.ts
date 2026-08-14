@@ -55,6 +55,8 @@ export interface UiMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** ISO timestamp; older persisted messages may lack it. */
+  ts?: string;
   toolCalls?: UiToolCall[];
   tickets?: UiTicket[];
   feedback?: "up" | "down";

@@ -9,6 +9,11 @@ import {
   type UiToolCall,
 } from "../lib/ui-types";
 
+function stamp(ts?: string): string | null {
+  if (!ts) return null;
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 /** Markdown-lite: bold, inline code and pipe tables — the model emits nothing
  * fancier here. Newlines are preserved by the surrounding whitespace-pre-wrap. */
 function mdLite(text: string): React.ReactNode[] {
@@ -208,8 +213,15 @@ export function Chat({
           {messages.map((m) => (
             <div key={m.id} className={`fade-up ${m.role === "user" ? "self-end" : "self-start"} max-w-[92%]`}>
               {m.role === "user" ? (
-                <div className="rounded-2xl rounded-br-md bg-[var(--accent)] px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
-                  {m.content}
+                <div>
+                  <div className="rounded-2xl rounded-br-md bg-[var(--accent)] px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
+                    {m.content}
+                  </div>
+                  {stamp(m.ts) && (
+                    <div className="mt-0.5 pr-1 text-right text-[10px] tabular-nums text-stone-400">
+                      {stamp(m.ts)}
+                    </div>
+                  )}
                 </div>
               ) : m.notice ? (
                 // Board update for a ticket this user raised — injected by the
@@ -225,6 +237,9 @@ export function Chat({
                   <span className="ml-1 text-[11px] font-medium text-indigo-500">
                     View on board →
                   </span>
+                  {stamp(m.ts) && (
+                    <span className="ml-2 text-[10px] tabular-nums text-indigo-300">{stamp(m.ts)}</span>
+                  )}
                 </button>
               ) : (
                 <div
@@ -281,8 +296,11 @@ export function Chat({
 
                   {m.toolCalls && <ToolStrip calls={m.toolCalls} />}
 
+                  {m.error && stamp(m.ts) && (
+                    <div className="mt-1 text-[10px] tabular-nums text-stone-400">{stamp(m.ts)}</div>
+                  )}
                   {!m.error && (
-                    <div className="mt-2 flex gap-1.5">
+                    <div className="mt-2 flex items-center gap-1.5">
                       {(["up", "down"] as const).map((r) => (
                         <button
                           key={r}
@@ -300,6 +318,11 @@ export function Chat({
                           {r === "up" ? "👍" : "👎"}
                         </button>
                       ))}
+                      {stamp(m.ts) && (
+                        <span className="ml-auto text-[10px] tabular-nums text-stone-400">
+                          {stamp(m.ts)}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

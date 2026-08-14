@@ -161,6 +161,7 @@ export default function Home() {
           id: `notice_${n.id}`,
           role: "assistant",
           content,
+          ts: n.ts,
           notice: { ticketId: n.ticketId },
         };
         const thread = next[n.forPrincipalId] ?? [];
@@ -205,7 +206,7 @@ export default function Home() {
       : (["chat", "tickets"] as const);
 
   const send = async (text: string) => {
-    const userMsg: UiMessage = { id: uid(), role: "user", content: text };
+    const userMsg: UiMessage = { id: uid(), role: "user", content: text, ts: new Date().toISOString() };
     const history = [...messages, userMsg];
     setConversations((c) => ({ ...c, [activeId]: history }));
     setBusy(true);
@@ -233,6 +234,7 @@ export default function Home() {
         id: uid(),
         role: "assistant",
         content: j.reply || "(no reply)",
+        ts: new Date().toISOString(),
         toolCalls,
         tickets: newTickets.length ? newTickets : undefined,
       };
@@ -246,6 +248,7 @@ export default function Home() {
         id: uid(),
         role: "assistant",
         content: e instanceof Error ? e.message : "Something went wrong.",
+        ts: new Date().toISOString(),
         error: true,
       };
       setConversations((c) => ({ ...c, [activeId]: [...history, err] }));
