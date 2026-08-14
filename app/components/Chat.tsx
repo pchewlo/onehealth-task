@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CHIPS,
-  TEAM_COLORS,
+  PILL_NEUTRAL,
   type UiMessage,
   type UiPrincipal,
   type UiToolCall,
@@ -15,30 +15,30 @@ function stamp(ts?: string): string | null {
 }
 
 /**
- * Machine tokens the model echoes from tool results, rendered as badges
- * instead of raw snake_case. Only unambiguous tokens are badged — words like
- * "refinement" or "complete" also occur as ordinary prose, so they stay text.
+ * Machine tokens the model echoes from tool results, rendered as quiet mono
+ * pills (never coloured — near-monochrome system). Only unambiguous tokens
+ * are treated; words like "refinement" also occur as prose and stay text.
  */
-const TOKEN_BADGES: Record<string, { label: string; cls: string }> = {
-  in_treatment: { label: "In treatment", cls: "bg-teal-100 text-teal-800" },
-  aligners_in_production: { label: "Aligners in production", cls: "bg-sky-100 text-sky-800" },
-  treatment_planning: { label: "Treatment planning", cls: "bg-violet-100 text-violet-800" },
-  SOLO: { label: "SOLO", cls: "bg-stone-200 text-stone-700" },
-  DUO: { label: "DUO", cls: "bg-stone-200 text-stone-700" },
+const TOKEN_LABEL: Record<string, string> = {
+  in_treatment: "In treatment",
+  aligners_in_production: "Aligners in production",
+  treatment_planning: "Treatment planning",
+  SOLO: "SOLO",
+  DUO: "DUO",
 };
 
 const TOKEN_RE = /\b(in_treatment|aligners_in_production|treatment_planning|SOLO|DUO)\b/g;
 
 function renderPlain(text: string, keyBase: string): React.ReactNode[] {
   return text.split(TOKEN_RE).map((seg, i) => {
-    const badge = TOKEN_BADGES[seg];
-    if (!badge) return seg;
+    const label = TOKEN_LABEL[seg];
+    if (!label) return seg;
     return (
       <span
         key={`${keyBase}_${i}`}
-        className={`mx-0.5 inline-block rounded-full px-2 py-px align-baseline text-[11px] font-semibold ${badge.cls}`}
+        className="mx-0.5 inline-block rounded-full bg-[var(--surface-2)] px-2 py-px align-baseline font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-2)]"
       >
-        {badge.label}
+        {label}
       </span>
     );
   });
@@ -53,7 +53,7 @@ function mdLite(text: string): React.ReactNode[] {
     }
     if (p.startsWith("`") && p.endsWith("`")) {
       return (
-        <code key={i} className="rounded bg-stone-100 px-1 py-px font-mono text-[12px]">
+        <code key={i} className="rounded bg-[var(--surface-2)] px-1 py-px font-mono text-[12px]">
           {p.slice(1, -1)}
         </code>
       );
@@ -72,8 +72,8 @@ const splitRow = (s: string) =>
     .split("|")
     .map((c) => c.trim());
 
-/** Message body renderer: pipe-table blocks become real tables, everything
- * around them goes through mdLite. */
+/** Message body renderer: pipe-table blocks become real tables (surface-2
+ * mono header, hairline rows), everything around them goes through mdLite. */
 function renderContent(text: string): React.ReactNode[] {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
@@ -93,25 +93,28 @@ function renderContent(text: string): React.ReactNode[] {
         rows.push(splitRow(lines[++i]));
       }
       out.push(
-        <div key={`table${out.length}`} className="my-2 overflow-x-auto whitespace-normal">
-          <table className="w-full border-collapse text-[12.5px]">
+        <div
+          key={`table${out.length}`}
+          className="my-2.5 overflow-hidden whitespace-normal rounded-lg border border-[var(--line)]"
+        >
+          <table className="w-full border-collapse text-[12px]">
             <thead>
-              <tr>
+              <tr className="bg-[var(--surface-2)]">
                 {header.map((h, j) => (
                   <th
                     key={j}
-                    className="border border-[var(--line)] bg-stone-50 px-2.5 py-1.5 text-left font-semibold"
+                    className="border-b border-[var(--line)] px-2.5 py-1.5 text-left font-mono text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--ink-2)]"
                   >
-                    {mdLite(h)}
+                    {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((r, j) => (
-                <tr key={j}>
+                <tr key={j} className="border-b border-[var(--surface-2)] last:border-0">
                   {header.map((_, k) => (
-                    <td key={k} className="border border-[var(--line)] px-2.5 py-1.5">
+                    <td key={k} className="px-2.5 py-[7px]">
                       {mdLite(r[k] ?? "")}
                     </td>
                   ))}
@@ -129,26 +132,6 @@ function renderContent(text: string): React.ReactNode[] {
   return out;
 }
 
-function ToolChip({ c }: { c: UiToolCall }) {
-  const argsSummary = summariseArgs(c.args);
-  return (
-    <span
-      title={c.allowed ? undefined : `${c.errorCode}: ${c.reason ?? ""}`}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-        c.allowed
-          ? "border-green-200 bg-[var(--allow-soft)] text-[var(--allow)]"
-          : "border-red-200 bg-[var(--deny-soft)] text-[var(--deny)]"
-      }`}
-    >
-      <span>{c.allowed ? "✓" : "⛔"}</span>
-      <span className="font-mono">
-        {c.tool}
-        {argsSummary ? `(${argsSummary})` : "()"}
-      </span>
-    </span>
-  );
-}
-
 function summariseArgs(args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const o = args as Record<string, unknown>;
@@ -162,26 +145,19 @@ function summariseArgs(args: unknown): string {
   return bits.join(", ");
 }
 
-function ToolStrip({ calls }: { calls: UiToolCall[] }) {
-  const [open, setOpen] = useState(false);
-  if (!calls.length) return null;
-  const denies = calls.filter((c) => !c.allowed).length;
+const callSig = (c: UiToolCall) => {
+  const a = summariseArgs(c.args);
+  return `${c.tool}(${a})`;
+};
+
+/** One quiet mono line for the allowed calls: "✓ get_case(C1) · create_ticket(…)".
+ * Denials render separately as deny rows. */
+function ToolLine({ calls }: { calls: UiToolCall[] }) {
+  const allowed = calls.filter((c) => c.allowed);
+  if (!allowed.length) return null;
   return (
-    <div className="mt-2">
-      <button
-        onClick={() => setOpen(!open)}
-        className="text-[11px] font-medium text-[var(--muted)] transition hover:text-stone-700"
-      >
-        {open ? "▾" : "▸"} {calls.length} tool call{calls.length === 1 ? "" : "s"}
-        {denies > 0 && <span className="text-[var(--deny)]"> · {denies} denied</span>}
-      </button>
-      {open && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {calls.map((c, i) => (
-            <ToolChip key={i} c={c} />
-          ))}
-        </div>
-      )}
+    <div className="mt-2.5 font-mono text-[11px] text-[var(--ink-3)]" title="Tool calls this reply made through the governed layer">
+      <span className="text-[var(--ok)]">✓</span> {allowed.map(callSig).join(" · ")}
     </div>
   );
 }
@@ -226,118 +202,99 @@ export function Chat({
     // min-h-0 at every level: without it a long thread grows this column past
     // the viewport and pushes the composer off-screen instead of scrolling.
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto flex max-w-[720px] flex-col gap-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="mx-auto flex max-w-[680px] flex-col gap-4">
           {messages.length === 0 && (
             <div className="mt-14 text-center">
-              <div className="text-[15px] font-medium text-stone-600">
+              <div className="text-[15px] font-semibold text-[var(--ink)]">
                 Ask something as {principal.name}
               </div>
-              <div className="mx-auto mt-2 max-w-[440px] text-[12.5px] leading-relaxed text-[var(--muted)]">
-                The assistant reaches data only through the governed layer, as this user. Watch the
-                audit log on the right — every tool call it makes lands there, allowed or denied.
+              <div className="mx-auto mt-2 max-w-[440px] text-[12.5px] leading-relaxed text-[var(--ink-2)]">
+                The assistant reaches data only through the governed layer, as this user.
+                {hasBoard &&
+                  " Watch the audit log on the right — every tool call it makes lands there, allowed or denied."}
               </div>
-              <div className="mt-3 text-[11.5px] text-stone-400">
-                Try a suggestion below — the ⛔ ones are supposed to be refused.
+              <div className="mt-3 text-[11.5px] text-[var(--ink-3)]">
+                Try a suggestion below — some are supposed to be refused.
               </div>
             </div>
           )}
 
           {messages.map((m) => (
-            <div key={m.id} className={`fade-up ${m.role === "user" ? "self-end" : "self-start"} max-w-[92%]`}>
+            <div
+              key={m.id}
+              className={`fade-up flex flex-col ${m.role === "user" ? "items-end self-end" : "items-stretch self-start"} ${m.role === "user" ? "max-w-[78%]" : "max-w-[88%]"}`}
+            >
               {m.role === "user" ? (
-                <div>
-                  <div className="rounded-2xl rounded-br-md bg-[var(--accent)] px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
+                <>
+                  <div className="rounded-[12px] rounded-br-[4px] bg-[var(--accent)] px-3.5 py-[9px] leading-normal text-white">
                     {m.content}
                   </div>
                   {stamp(m.ts) && (
-                    <div className="mt-0.5 pr-1 text-right text-[10px] tabular-nums text-stone-400">
+                    <div className="mt-1 font-mono text-[10px] tabular-nums text-[var(--ink-3)]">
                       {stamp(m.ts)}
                     </div>
                   )}
-                </div>
+                </>
               ) : m.resolveAsk ? (
-                <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-soft)]/50 px-4 py-3">
-                  <div className="text-[12.5px] font-medium text-stone-700">
+                <div className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-soft)]/60 px-3.5 py-3">
+                  <div className="text-[12.5px] font-medium text-[var(--ink)]">
                     Did this resolve your query?
                   </div>
                   {m.resolveAnswer ? (
-                    <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">
+                    <div className="mt-1.5 text-[11.5px] text-[var(--ink-2)]">
                       {m.resolveAnswer === "yes"
-                        ? "Thanks — logged as resolved ✓ Your next message starts a fresh conversation."
+                        ? "Thanks — logged as resolved. Your next message starts a fresh conversation."
                         : m.resolveAnswer === "skipped"
                           ? "Skipped — the conversation continued."
                           : "Thanks — logged as unresolved. Your next message starts a fresh conversation."}
                     </div>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => onResolve(m.id, "yes")}
-                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                      >
-                        Yes, resolved
-                      </button>
-                      <button
-                        onClick={() => onResolve(m.id, "bad_answer")}
-                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-red-300 hover:text-red-700"
-                      >
-                        No — wrong answer
-                      </button>
-                      <button
-                        onClick={() => onResolve(m.id, "confusion")}
-                        className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-amber-400 hover:text-amber-700"
-                      >
-                        No — still need help
-                      </button>
+                      {(
+                        [
+                          ["yes", "Yes, resolved"],
+                          ["bad_answer", "No — wrong answer"],
+                          ["confusion", "No — still need help"],
+                        ] as const
+                      ).map(([verdict, label]) => (
+                        <button
+                          key={verdict}
+                          onClick={() => onResolve(m.id, verdict)}
+                          className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-[var(--ink-2)] transition-all duration-150 ease-out hover:border-[var(--accent)] hover:text-[var(--accent-ink)]"
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
               ) : m.notice ? (
                 // Board update for a ticket this user raised — injected by the
-                // app, not spoken by the model, and styled so the difference
-                // is visible.
+                // app, not spoken by the model, styled so the difference shows.
                 <button
                   onClick={() => hasBoard && onOpenTicket(m.notice!.ticketId)}
                   disabled={!hasBoard}
                   title={hasBoard ? "Open on the ticket board" : undefined}
-                  className={`block w-full rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-left text-[12.5px] leading-relaxed text-indigo-900 shadow-sm transition ${hasBoard ? "hover:border-indigo-400" : "cursor-default"}`}
+                  className={`block w-full rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-soft)]/60 px-3.5 py-2.5 text-left text-[12.5px] leading-relaxed text-[var(--accent-ink)] transition-all duration-150 ease-out ${hasBoard ? "hover:border-[var(--accent)]" : "cursor-default"}`}
                 >
-                  <span className="mr-1.5">📣</span>
-                  {m.content}{" "}
-                  {hasBoard && (
-                    <span className="ml-1 text-[11px] font-medium text-indigo-500">
-                      View on board →
-                    </span>
-                  )}
+                  {m.content}
+                  {hasBoard && <span className="ml-1.5 font-medium">View on board →</span>}
                   {stamp(m.ts) && (
-                    <span className="ml-2 text-[10px] tabular-nums text-indigo-300">{stamp(m.ts)}</span>
+                    <span className="ml-2 font-mono text-[10px] tabular-nums text-[var(--ink-3)]">
+                      {stamp(m.ts)}
+                    </span>
                   )}
                 </button>
               ) : (
                 <div
-                  className={`rounded-2xl rounded-bl-md border px-4 py-3 text-[13.5px] leading-relaxed shadow-sm ${
+                  className={`rounded-[12px] rounded-bl-[4px] border px-3.5 py-3 ${
                     m.error
-                      ? "border-red-200 bg-[var(--deny-soft)] text-[var(--deny)]"
+                      ? "border-[var(--deny-line)] bg-[var(--deny-soft)] text-[var(--deny)]"
                       : "border-[var(--line)] bg-white"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{renderContent(m.content)}</div>
-
-                  {m.toolCalls?.some((c) => !c.allowed) && (
-                    <div className="mt-2.5 space-y-1">
-                      {m.toolCalls
-                        .filter((c) => !c.allowed)
-                        .map((c, i) => (
-                          <div
-                            key={i}
-                            className="rounded-lg border border-amber-200 bg-[var(--warn-soft)] px-2.5 py-1.5 text-[11.5px] text-[var(--warn)]"
-                          >
-                            ⛔ <span className="font-mono">{c.tool}({summariseArgs(c.args)})</span>{" "}
-                            — {c.errorCode === "OUT_OF_SCOPE" ? "out of scope" : c.errorCode}
-                          </div>
-                        ))}
-                    </div>
-                  )}
+                  <div className="whitespace-pre-wrap leading-[1.55]">{renderContent(m.content)}</div>
 
                   {m.tickets?.map((t) => (
                     <button
@@ -345,38 +302,42 @@ export function Chat({
                       onClick={() => hasBoard && onOpenTicket(t.id)}
                       disabled={!hasBoard}
                       title={hasBoard ? "Open on the ticket board" : undefined}
-                      className={`group mt-2.5 block w-full rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5 text-left transition ${hasBoard ? "hover:border-[var(--accent)] hover:bg-white" : "cursor-default"}`}
+                      className={`group mt-2.5 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-left transition-all duration-150 ease-out ${hasBoard ? "hover:border-[var(--accent)]" : "cursor-default"}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
-                        >
-                          {t.team}
-                        </span>
-                        <span className="text-[12.5px] font-medium">
-                          {hasBoard ? t.subject : `Ticket raised: ${t.subject}`}
-                        </span>
-                        <span className="ml-auto font-mono text-[10.5px] text-[var(--muted)]">
-                          {t.id}
-                        </span>
-                      </div>
+                      <span className={PILL_NEUTRAL}>{t.team}</span>
+                      <span className="min-w-0 truncate text-[12px] font-medium" title={t.subject}>
+                        {hasBoard ? t.subject : `Ticket raised: ${t.subject}`}
+                      </span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] text-[var(--ink-3)]">
+                        {t.id}
+                      </span>
                       {hasBoard && (
-                        <div className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
-                          {t.routingReason}
-                        </div>
-                      )}
-                      {hasBoard && (
-                        <div className="mt-1 text-[10.5px] font-medium text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
-                          View on board →
-                        </div>
+                        <span className="shrink-0 text-[11px] font-medium text-[var(--accent-ink)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                          →
+                        </span>
                       )}
                     </button>
                   ))}
 
-                  {m.toolCalls && <ToolStrip calls={m.toolCalls} />}
+                  {m.toolCalls
+                    ?.filter((c) => !c.allowed)
+                    .map((c, i) => (
+                      <div
+                        key={i}
+                        title={c.reason}
+                        className="mt-2.5 flex items-center gap-2 rounded-lg border border-[var(--deny-line)] bg-[var(--deny-soft)] px-3 py-[7px] text-[12px] text-[var(--deny)]"
+                      >
+                        <span>✕</span>
+                        <span className="font-mono text-[11px]">
+                          {callSig(c)} · {c.errorCode === "OUT_OF_SCOPE" ? "out of scope" : c.errorCode}
+                        </span>
+                      </div>
+                    ))}
+
+                  {m.toolCalls && <ToolLine calls={m.toolCalls} />}
 
                   {stamp(m.ts) && (
-                    <div className="mt-1.5 text-right text-[10px] tabular-nums text-stone-400">
+                    <div className="mt-1.5 text-right font-mono text-[10px] tabular-nums text-[var(--ink-3)]">
                       {stamp(m.ts)}
                     </div>
                   )}
@@ -386,41 +347,33 @@ export function Chat({
           ))}
 
           {busy && (
-            <div className="fade-up flex items-center gap-1.5 self-start rounded-2xl rounded-bl-md border border-[var(--line)] bg-white px-4 py-3">
+            <div className="fade-up flex items-center gap-1.5 self-start rounded-[12px] rounded-bl-[4px] border border-[var(--line)] bg-white px-4 py-3">
               {[0, 1, 2].map((i) => (
-                <span key={i} className="thinking-dot h-1.5 w-1.5 rounded-full bg-stone-400" />
+                <span key={i} className="thinking-dot h-1.5 w-1.5 rounded-full bg-[var(--ink-3)]" />
               ))}
             </div>
           )}
         </div>
       </div>
 
-      <div className="border-t border-[var(--line)] bg-white/70 px-6 py-4">
-        <div className="mx-auto max-w-[720px]">
+      <div className="border-t border-[var(--line)] bg-white px-6 pb-4 pt-3">
+        <div className="mx-auto flex max-w-[680px] flex-col gap-2.5">
           {keyMissing && (
-            <div className="mb-2 rounded-lg border border-amber-200 bg-[var(--warn-soft)] px-3 py-2 text-[12px] text-[var(--warn)]">
+            <div className="rounded-lg border border-[var(--warn)]/30 bg-[var(--warn-soft)] px-3 py-2 text-[12px] text-[var(--warn)]">
               The Anthropic API key on the server has no credit — chat is disabled until it is
               topped up. The proof script and audit trail still work.
             </div>
           )}
           {chips.length > 0 && (
-            <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="mr-0.5 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
-                try
-              </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="label mr-0.5 !text-[var(--ink-3)]">Try</span>
               {chips.map((c) => (
                 <button
                   key={c.label}
                   onClick={() => send(c.text)}
                   disabled={busy}
                   title={c.text}
-                  className={`rounded-full border px-3 py-1 text-[11.5px] transition disabled:opacity-40 ${
-                    c.kind === "redteam"
-                      ? "border-red-200 bg-red-50/60 text-red-700 hover:border-red-400"
-                      : c.kind === "learn1" || c.kind === "learn2"
-                        ? "border-indigo-200 bg-indigo-50/60 text-indigo-700 hover:border-indigo-400"
-                        : "border-[var(--line)] bg-white text-stone-600 hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                  }`}
+                  className="whitespace-nowrap rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-[var(--ink-2)] transition-all duration-150 ease-out hover:border-[var(--accent)] hover:text-[var(--accent-ink)] disabled:opacity-40"
                 >
                   {c.label}
                 </button>
@@ -439,12 +392,12 @@ export function Chat({
               onChange={(e) => setDraft(e.target.value)}
               placeholder={`Message as ${principal.name}…`}
               disabled={busy}
-              className="flex-1 rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-[13.5px] outline-none transition placeholder:text-stone-400 focus:border-[var(--accent)] disabled:opacity-60"
+              className="flex-1 rounded-lg border border-[var(--line)] bg-white px-3.5 py-[9px] text-[13px] outline-none transition-all duration-150 ease-out placeholder:text-[var(--ink-3)] focus:border-[var(--accent)] disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={busy || !draft.trim()}
-              className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+              className="rounded-lg bg-[var(--accent)] px-[18px] py-[9px] text-[13px] font-semibold text-white transition-all duration-150 ease-out hover:opacity-90 disabled:opacity-40"
             >
               Send
             </button>

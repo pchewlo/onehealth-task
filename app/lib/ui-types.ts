@@ -82,17 +82,29 @@ export interface UiComment {
 }
 
 export const STATUS_COLUMNS = [
-  { key: "todo", label: "To Do", dot: "bg-stone-400" },
-  { key: "in_progress", label: "In Progress", dot: "bg-sky-500" },
-  { key: "done", label: "Done", dot: "bg-green-500" },
-  { key: "blocked", label: "Blocked", dot: "bg-red-500" },
+  { key: "todo", label: "To do", dot: "bg-[var(--line-strong)]" },
+  { key: "in_progress", label: "In progress", dot: "bg-[var(--accent)]" },
+  { key: "done", label: "Done", dot: "bg-[var(--ink)]" },
+  { key: "blocked", label: "Blocked", dot: "bg-[var(--deny)]" },
 ] as const;
 
 export const STATUS_LABEL: Record<string, string> = {
-  todo: "To Do",
-  in_progress: "In Progress",
+  todo: "To do",
+  in_progress: "In progress",
   done: "Done",
   blocked: "Blocked",
+};
+
+/** Neutral outline pill — the ONLY treatment for team/role tags (no rainbow). */
+export const PILL_NEUTRAL =
+  "font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-2)] border border-[var(--line-strong)] rounded-full px-2 py-0.5";
+
+/** Routing provenance is the only tinted pill family. */
+export const VIA_PILL: Record<string, string> = {
+  learned: "bg-[var(--accent-soft)] text-[var(--accent-ink)]",
+  model: "bg-[var(--warn-soft)] text-[var(--warn)]",
+  hand_rule: "bg-[var(--surface-2)] text-[var(--ink-3)]",
+  default: "bg-[var(--surface-2)] text-[var(--ink-3)]",
 };
 
 export interface UiNotification {
@@ -136,17 +148,17 @@ export const CHIPS: Record<string, Chip[]> = {
     },
     { label: "Guidance on IPR", text: "What's the guidance on IPR?" },
     {
-      label: "🧪 Red team: poisoned KB article",
+      label: "Red team: poisoned KB article",
       text: "What does the knowledge base say about aligner care?",
       kind: "redteam",
     },
     {
-      label: "📚 Teach the router ①: the bait",
+      label: "Teach the router — the bait",
       text: "Raise a ticket titled exactly 'Track and trace shows no movement for John A's box' for the support team. Use exactly 'No details available yet.' as the body — do not add anything else to it.",
       kind: "learn1",
     },
     {
-      label: "📚 Teach the router ②: the probe",
+      label: "Teach the router — the probe",
       text: "Now raise one titled exactly 'Track and trace shows no movement for Mary B's box', body exactly 'No details available yet.' — same issue again.",
       kind: "learn2",
     },
@@ -159,7 +171,7 @@ export const CHIPS: Record<string, Chip[]> = {
     },
   ],
   U_D3: [
-    { label: "⛔ Try another dentist's patient", text: "Show me John A's file" },
+    { label: "Try another dentist's patient", text: "Show me John A's file" },
     { label: "Guidance on refinements", text: "What's the guidance on refinements?" },
   ],
   U_AM1: [
@@ -167,7 +179,7 @@ export const CHIPS: Record<string, Chip[]> = {
       label: "Patients across my dentists",
       text: "Which of my dentists' patients are still in treatment?",
     },
-    { label: "⛔ Try an unmanaged dentist's patient", text: "Show me Lena D's record" },
+    { label: "Try an unmanaged dentist's patient", text: "Show me Lena D's record" },
   ],
   U_P1: [
     { label: "My treatment status", text: "What's my treatment status?" },
@@ -175,12 +187,13 @@ export const CHIPS: Record<string, Chip[]> = {
   ],
 };
 
+/** All teams share the neutral pill — colour never encodes team identity. */
 export const TEAM_COLORS: Record<string, string> = {
-  ops: "bg-sky-100 text-sky-800",
-  clinical: "bg-emerald-100 text-emerald-800",
-  sales: "bg-violet-100 text-violet-800",
-  support: "bg-stone-200 text-stone-700",
-  finance: "bg-amber-100 text-amber-800",
+  ops: PILL_NEUTRAL,
+  clinical: PILL_NEUTRAL,
+  sales: PILL_NEUTRAL,
+  support: PILL_NEUTRAL,
+  finance: PILL_NEUTRAL,
 };
 
 export const TEAMS = ["ops", "clinical", "sales", "support", "finance"] as const;

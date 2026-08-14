@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./components/Chat";
 import { MetricsTab } from "./components/MetricsTab";
 import { PrincipalSwitcher } from "./components/PrincipalSwitcher";
-import { AuditLog, TicketsPanel, type CorrectionNote } from "./components/RightRail";
+import { AuditLog, LearnedRulesBlock, type CorrectionNote } from "./components/RightRail";
 import { TicketBoard } from "./components/TicketBoard";
 import type {
   UiAuditEntry,
@@ -396,7 +396,7 @@ export default function Home() {
         ? {
             ticketId,
             kind: "learned",
-            detail: `📚 Router learned: ${
+            detail: `Router learned: ${
               j.learned.tokens?.length ? j.learned.tokens.join("+") : "this exact subject"
             } → ${team}`,
           }
@@ -545,7 +545,7 @@ export default function Home() {
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-5 border-b border-[var(--line)] bg-white/70 px-6 py-3">
+        <header className="flex items-center gap-4 border-b border-[var(--line)] bg-white px-6 py-3">
           <div>
             <h1 className="text-[14px] font-semibold leading-tight">Governed Agent Layer</h1>
             <p className="text-[11px] text-[var(--muted)]">
@@ -556,20 +556,20 @@ export default function Home() {
             <button
               onClick={clearChat}
               title="Forget this user's conversation — it's closed out for metrics first. Reset demo clears every user's history."
-              className="ml-auto text-[11px] font-medium text-stone-400 transition hover:text-[var(--deny)]"
+              className="ml-auto text-[11px] font-medium text-[var(--ink-3)] transition hover:text-[var(--ink-2)]"
             >
               clear chat
             </button>
           )}
           <nav
-            className={`flex gap-1 rounded-lg border border-[var(--line)] bg-white p-0.5 ${tab === "chat" && messages.length > 0 ? "" : "ml-auto"} ${tabs.length === 1 ? "invisible" : ""}`}
+            className={`flex gap-0.5 rounded-lg border border-[var(--line)] bg-white p-[2px] ${tab === "chat" && messages.length > 0 ? "" : "ml-auto"} ${tabs.length === 1 ? "invisible" : ""}`}
           >
             {tabs.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`rounded-md px-3.5 py-1 text-[12px] font-medium capitalize transition ${
-                  tab === t ? "bg-[var(--accent)] text-white" : "text-stone-500 hover:text-stone-800"
+                className={`rounded-md px-3.5 py-1 text-[12px] font-medium capitalize transition-all duration-150 ease-out ${
+                  tab === t ? "bg-[var(--accent)] text-white" : "text-[var(--ink-2)] hover:text-[var(--ink)]"
                 }`}
               >
                 {t}
@@ -610,17 +610,12 @@ export default function Home() {
       </main>
 
       {tab === "chat" && !isPatient && (
-        <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-[var(--line)] bg-white/60">
+        <aside className="flex h-full w-[300px] shrink-0 flex-col border-l border-[var(--line)] bg-white">
           <AuditLog
             entries={audit}
             nameOf={(id) => principals.find((p) => p.id === id)?.name ?? id}
           />
-          <TicketsPanel
-            tickets={tickets}
-            learnedRules={learnedRules}
-            note={correctionNote}
-            onReassign={reassign}
-          />
+          {isStaff && <LearnedRulesBlock rules={learnedRules} />}
         </aside>
       )}
     </div>

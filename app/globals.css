@@ -1,19 +1,41 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
+/* Design tokens — design_handoff_dashboard_redesign. Near-monochrome; the
+ * quiet teal is the ONE accent. Semantic red/green/amber appear only where
+ * meaning demands it (audit allow/deny, denial rows, blocked, warn). */
 :root {
-  --bg: #f7f6f3;
-  --panel: #ffffff;
-  --ink: #1c1917;
-  --muted: #78716c;
-  --line: #e7e5e0;
-  --accent: #0d7377;
-  --accent-soft: #e0f2f1;
-  --deny: #b91c1c;
-  --deny-soft: #fef2f2;
-  --warn: #b45309;
-  --warn-soft: #fffbeb;
-  --allow: #15803d;
-  --allow-soft: #f0fdf4;
+  /* neutrals — warm near-monochrome */
+  --bg: #f7f6f4;
+  --surface: #ffffff;
+  --surface-2: #f2f1ee;
+  --ink: #1c1a18;
+  --ink-2: #66615b;
+  --ink-3: #a09a92;
+  --line: #e8e6e1;
+  --line-strong: #d8d5cf;
+  /* the one accent */
+  --accent: #437989;
+  --accent-soft: #eaf1f3;
+  --accent-ink: #33606d;
+  /* semantic */
+  --ok: #44795c;
+  --ok-soft: #edf4ef;
+  --deny: #a13d33;
+  --deny-soft: #f9efed;
+  --deny-line: #f0ddd9;
+  --warn: #96682b;
+  --warn-soft: #f7f1e6;
+  /* brand */
+  --brand-ink: #544b45;
+  /* type */
+  --font-sans: "Geist", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  /* legacy aliases still referenced in components */
+  --muted: var(--ink-2);
+  --panel: var(--surface);
+  --allow: var(--ok);
+  --allow-soft: var(--ok-soft);
 }
 
 html,
@@ -21,7 +43,21 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--ink);
-  font-feature-settings: "ss01";
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* mono uppercase label — the system's section/label voice */
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
 }
 
 ::-webkit-scrollbar {
@@ -29,7 +65,7 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d6d3ce;
+  background: var(--line-strong);
   border-radius: 8px;
 }
 ::-webkit-scrollbar-track {
@@ -39,15 +75,15 @@ body {
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(3px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 .fade-up {
-  animation: fadeUp 0.18s ease-out;
+  animation: fadeUp 150ms ease-out;
 }
 
 @keyframes pulseDot {

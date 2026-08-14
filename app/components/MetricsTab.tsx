@@ -51,7 +51,7 @@ function Sparkline({ daily }: { daily: DailyPoint[] }) {
           <div
             key={d.date}
             title={`${d.date}: ${Math.round(rate * 100)}% (${d.resolved}/${d.total})`}
-            className="w-3 rounded-t-sm bg-[var(--accent)] opacity-80 transition hover:opacity-100"
+            className="w-2.5 rounded-t-[2px] bg-[var(--accent)] opacity-85 transition hover:opacity-100"
             style={{ height: `${Math.max(8, rate * 100)}%` }}
           />
         );
@@ -62,12 +62,10 @@ function Sparkline({ daily }: { daily: DailyPoint[] }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-[var(--line)] bg-white px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </div>
+    <div className="rounded-lg border border-[var(--line)] bg-white px-4 py-3">
+      <div className="label">{label}</div>
       <div className="mt-1 text-[22px] font-semibold tabular-nums">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-[var(--muted)]">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[11px] text-[var(--ink-3)]">{sub}</div>}
     </div>
   );
 }
@@ -123,29 +121,24 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6">
-      <div className="mx-auto max-w-[840px] space-y-5">
-        <div className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11.5px] text-[var(--muted)]">
-          Backfilled synthetic data for demo ({counts.synthetic} events); live events append from
-          your session ({counts.live} so far).
-        </div>
-
+      <div className="mx-auto max-w-[840px] space-y-3.5">
         {/* OMTM */}
-        <div className="flex items-end justify-between rounded-2xl border border-[var(--line)] bg-white px-6 py-5">
+        <div className="flex items-end justify-between rounded-lg border border-[var(--line)] bg-white px-6 py-5">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-              Resolution rate · the one metric that matters
-            </div>
-            <div className="mt-1 text-[44px] font-semibold leading-none tabular-nums text-[var(--accent)]">
+            <div className="label">Resolution rate</div>
+            <div className="mt-0.5 text-[44px] font-semibold leading-[1.1] tabular-nums text-[var(--accent)]">
               {pct(metrics.resolutionRate)}
             </div>
-            <div className="mt-1.5 text-[12px] text-[var(--muted)]">
+            <div className="mt-0.5 text-[12px] text-[var(--ink-2)]">
               {metrics.resolvedConversations} of {metrics.conversations} conversations resolved
               without human correction
             </div>
           </div>
           <div className="text-right">
             <Sparkline daily={metrics.daily} />
-            <div className="mt-1 text-[10.5px] text-[var(--muted)]">last 14 days</div>
+            <div className="mt-1 font-mono text-[10px] text-[var(--ink-3)]">
+              last 14 days · {counts.synthetic} synthetic + {counts.live} live events
+            </div>
           </div>
         </div>
 
@@ -180,19 +173,17 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
         </div>
 
         {/* Unresolved reasons */}
-        <div className="rounded-xl border border-[var(--line)] bg-white px-4 py-3">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
-            Unresolved by reason
-          </div>
+        <div className="rounded-lg border border-[var(--line)] bg-white px-4 py-3.5">
+          <div className="label">Unresolved by reason</div>
           <div className="mt-2 space-y-1.5">
             {Object.entries(metrics.unresolvedByReason).map(([reason, n]) => {
               const max = Math.max(1, ...Object.values(metrics.unresolvedByReason));
               return (
                 <div key={reason} className="flex items-center gap-2 text-[12px]">
-                  <span className="w-24 text-[var(--muted)]">{reason.replace("_", " ")}</span>
-                  <div className="h-3 flex-1 rounded bg-stone-100">
+                  <span className="w-[88px] text-[var(--ink-2)]">{reason.replace("_", " ")}</span>
+                  <div className="h-2 flex-1 rounded bg-[var(--surface-2)]">
                     <div
-                      className="h-3 rounded bg-stone-400"
+                      className="h-2 rounded bg-[var(--line-strong)]"
                       style={{ width: `${(n / max) * 100}%` }}
                     />
                   </div>
@@ -204,21 +195,21 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
         </div>
 
         {/* Simulator */}
-        <div className="rounded-2xl border border-[var(--line)] bg-white px-5 py-4">
+        <div className="rounded-lg border border-[var(--line)] bg-white px-4 py-3.5">
           <div className="flex items-center gap-3">
             <button
               onClick={runSim}
               disabled={simRunning || keyMissing}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+              className="rounded-md bg-[var(--accent)] px-4 py-2 text-[12.5px] font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
             >
-              {simRunning ? "Simulating…" : "▶ Simulate a morning"}
+              {simRunning ? "Running…" : "Run 15 fixtures"}
             </button>
-            <div className="text-[12px] text-[var(--muted)]">
+            <div className="text-[12px] text-[var(--ink-2)]">
               {simRunning
                 ? "Running 15 fixtures through the real chat pipeline…"
                 : simResults
                   ? `${simResults.filter((r) => r.pass).length}/${simResults.length} as expected · ${misroutes} mis-routed · ${denied} denied`
-                  : "15 fixtures through the real pipeline — doubles as the eval harness."}
+                  : "The traffic simulator doubles as the eval harness."}
             </div>
             <label className="ml-auto flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
               <input
@@ -264,7 +255,7 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
                     <td className="py-1.5 pr-2">
                       <Expect v={r.actual} />
                     </td>
-                    <td className="py-1.5">{r.pass ? "✅" : "❌"}</td>
+                    <td className={`py-1.5 ${r.pass ? "text-[var(--ok)]" : "text-[var(--deny)]"}`}>{r.pass ? "✓" : "✕"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -272,9 +263,8 @@ export function MetricsTab({ keyMissing }: { keyMissing: boolean }) {
           )}
         </div>
 
-        <div className="rounded-lg border border-dashed border-[var(--line)] px-4 py-2.5 text-[11.5px] text-stone-400">
-          Requires production data: cases per practice · ops hours saved · time-to-resolution by
-          team
+        <div className="rounded-lg border border-dashed border-[var(--line)] px-4 py-2.5 text-[11px] text-[var(--ink-3)]">
+          Needs production data: cases per practice · ops hours saved · time-to-resolution by team
         </div>
       </div>
     </div>

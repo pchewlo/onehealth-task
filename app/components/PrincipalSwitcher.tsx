@@ -2,65 +2,62 @@
 
 import type { UiPrincipal } from "../lib/ui-types";
 
-const TYPE_LABEL: Record<UiPrincipal["type"], string> = {
-  internal_staff: "Internal staff",
-  dentist: "Dentist",
-  patient: "Patient",
+/**
+ * Sidebar — redesigned per design_handoff_dashboard_redesign.
+ * Flat white cards; nesting is padding only (no connector lines); the type
+ * badge is a quiet mono word, not a coloured pill; the active card carries
+ * the one accent. The tree still IS the scoping story.
+ */
+
+const TYPE_BADGE_LABEL: Record<UiPrincipal["type"], string> = {
+  internal_staff: "staff",
+  dentist: "dentist",
+  patient: "patient",
 };
 
-const TYPE_BADGE: Record<UiPrincipal["type"], string> = {
-  internal_staff: "bg-violet-100 text-violet-700",
-  dentist: "bg-teal-100 text-teal-800",
-  patient: "bg-amber-100 text-amber-800",
-};
+function roleLine(p: UiPrincipal): string {
+  if (p.type === "internal_staff") {
+    const names = p.managesNames ?? p.manages ?? [];
+    return `${p.title} · manages ${names.join(", ")}`;
+  }
+  if (p.type === "patient") return `Patient${p.practice ? ` · ${p.practice}` : ""}`;
+  return p.practice ?? p.title;
+}
 
 function Card({
   p,
   active,
+  pad,
   onSwitch,
 }: {
   p: UiPrincipal;
   active: boolean;
+  pad: number;
   onSwitch: (id: string) => void;
 }) {
   return (
-    <button
-      onClick={() => onSwitch(p.id)}
-      className={`w-full rounded-xl border px-3.5 py-3 text-left transition-all ${
-        active
-          ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-sm"
-          : "border-[var(--line)] bg-white hover:border-stone-300 hover:bg-stone-50"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[13.5px] font-semibold leading-tight">{p.name}</span>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_BADGE[p.type]}`}>
-          {TYPE_LABEL[p.type]}
-        </span>
-      </div>
-      <div className="mt-1 text-[11.5px] leading-snug text-[var(--muted)]">
-        {p.title}
-        {p.practice && <span> · {p.practice}</span>}
-      </div>
-      {(p.managesNames ?? p.manages) && (p.managesNames ?? p.manages)!.length > 0 && (
-        <div className="mt-0.5 text-[11px] leading-snug text-[var(--muted)]">
-          <span className="text-stone-400">manages</span>
-          {(p.managesNames ?? p.manages)!.map((name) => (
-            <div key={name} className="pl-2">
-              · {name}
-            </div>
-          ))}
+    <div style={{ paddingLeft: pad }}>
+      <button
+        onClick={() => onSwitch(p.id)}
+        className={`w-full rounded-lg border px-3 py-2 text-left transition-all duration-150 ease-out ${
+          active
+            ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+            : "border-[var(--line)] bg-white hover:border-[var(--line-strong)]"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-[var(--ink)]">{p.name}</span>
+          <span
+            className={`ml-auto font-mono text-[9px] uppercase tracking-[0.06em] ${
+              active ? "text-[var(--accent-ink)]" : "text-[var(--ink-3)]"
+            }`}
+          >
+            {TYPE_BADGE_LABEL[p.type]}
+          </span>
         </div>
-      )}
-    </button>
-  );
-}
-
-/** Indented child group with a connector line, so the ownership tree is
- * visible at a glance: staff → their dentists → those dentists' patients. */
-function Children({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="ml-3 mt-2 space-y-2 border-l-2 border-[var(--line)] pl-2.5">{children}</div>
+        <div className="mt-0.5 text-[11px] leading-snug text-[var(--ink-2)]">{roleLine(p)}</div>
+      </button>
+    </div>
   );
 }
 
@@ -86,84 +83,72 @@ export function PrincipalSwitcher({
   const patients = principals.filter((p) => p.type === "patient");
 
   const managedIds = new Set(staff.flatMap((s) => s.manages ?? []));
-  const patientsOf = (dentistId?: string) =>
-    patients.filter((p) => p.dentistId === dentistId);
-  const unmanagedDentists = dentists.filter(
-    (d) => !d.dentistId || !managedIds.has(d.dentistId),
-  );
-  // Patients whose dentist isn't in the switcher at all still need a home.
+  const patientsOf = (dentistId?: string) => patients.filter((p) => p.dentistId === dentistId);
+  const unmanagedDentists = dentists.filter((d) => !d.dentistId || !managedIds.has(d.dentistId));
   const dentistIds = new Set(dentists.map((d) => d.dentistId));
   const orphanPatients = patients.filter((p) => !dentistIds.has(p.dentistId));
 
-  const dentistWithPatients = (d: UiPrincipal) => (
-    <div key={d.id}>
-      <Card p={d} active={d.id === activeId} onSwitch={onSwitch} />
-      {patientsOf(d.dentistId).length > 0 && (
-        <Children>
-          {patientsOf(d.dentistId).map((pt) => (
-            <Card key={pt.id} p={pt} active={pt.id === activeId} onSwitch={onSwitch} />
-          ))}
-        </Children>
-      )}
+  const isActive = (id: string) => id === activeId;
+
+  const dentistWithPatients = (d: UiPrincipal, basePad: number) => (
+    <div key={d.id} className="flex flex-col gap-1.5">
+      <Card p={d} active={isActive(d.id)} pad={basePad} onSwitch={onSwitch} />
+      {patientsOf(d.dentistId).map((pt) => (
+        <Card key={pt.id} p={pt} active={isActive(pt.id)} pad={basePad + 14} onSwitch={onSwitch} />
+      ))}
     </div>
   );
 
   return (
-    <aside className="flex h-full w-[268px] shrink-0 flex-col border-r border-[var(--line)] bg-white/60">
-      <div className="px-4 pb-2 pt-5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-          Signed in as
-        </div>
+    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-[var(--line)] bg-white">
+      <div className="flex flex-col gap-3.5 px-4 pb-3.5 pt-[18px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/onehealth-logo.svg" alt="01Health" className="h-4 self-start" />
+        <div className="label">Signed in as</div>
       </div>
-      <div className="flex flex-col gap-2 overflow-y-auto px-3 pb-3">
-        {/* Staff, with their managed dentists (and those dentists' patients) nested */}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3">
         {staff.map((s) => (
-          <div key={s.id}>
-            <Card p={s} active={s.id === activeId} onSwitch={onSwitch} />
-            <Children>
-              {dentists
-                .filter((d) => d.dentistId && (s.manages ?? []).includes(d.dentistId))
-                .map(dentistWithPatients)}
-            </Children>
+          <div key={s.id} className="flex flex-col gap-1.5">
+            <Card p={s} active={isActive(s.id)} pad={0} onSwitch={onSwitch} />
+            {dentists
+              .filter((d) => d.dentistId && (s.manages ?? []).includes(d.dentistId))
+              .map((d) => dentistWithPatients(d, 14))}
           </div>
         ))}
 
-        {/* Dentists outside any account manager's book — deliberately separate:
-            the hierarchy IS the scoping story. */}
         {unmanagedDentists.length > 0 && (
           <>
-            <div className="mt-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
-              No account manager
-            </div>
-            {unmanagedDentists.map(dentistWithPatients)}
+            <div className="label px-1 pt-2 !text-[var(--ink-3)]">No account manager</div>
+            {unmanagedDentists.map((d) => dentistWithPatients(d, 0))}
           </>
         )}
 
         {orphanPatients.map((pt) => (
-          <Card key={pt.id} p={pt} active={pt.id === activeId} onSwitch={onSwitch} />
+          <Card key={pt.id} p={pt} active={isActive(pt.id)} pad={0} onSwitch={onSwitch} />
         ))}
       </div>
 
-      <div className="mt-auto space-y-3 border-t border-[var(--line)] px-4 py-4">
-        <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-          Principal is bound server-side per session — the model cannot change it.
+      <div className="flex flex-col gap-2.5 border-t border-[var(--line)] px-4 py-3.5">
+        <p className="text-[11px] leading-relaxed text-[var(--ink-3)]">
+          Principal is bound server-side — the model cannot change it.
         </p>
         <button
           onClick={onReset}
           disabled={resetting}
-          className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-[12px] font-medium text-stone-600 transition hover:bg-stone-50 disabled:opacity-50"
+          className="rounded-md border border-[var(--line)] bg-white px-3 py-1.5 text-[12px] font-medium text-[var(--ink-2)] transition-all duration-150 ease-out hover:border-[var(--line-strong)] hover:text-[var(--ink)] disabled:opacity-50"
         >
           {resetting ? "Resetting…" : "Reset demo"}
         </button>
         <button
           onClick={onDevAskResolve}
           title="Dev: trigger the idle resolve-prompt immediately instead of waiting 30s"
-          className="w-full rounded-lg border border-dashed border-[var(--line)] bg-white px-3 py-1.5 text-[11px] text-stone-400 transition hover:bg-stone-50 hover:text-stone-600"
+          className="rounded-md border border-dashed border-[var(--line)] bg-white px-3 py-1.5 text-[11px] text-[var(--ink-3)] transition-all duration-150 ease-out hover:border-[var(--line-strong)] hover:text-[var(--ink-2)]"
         >
-          ⚙ Trigger &ldquo;did this resolve?&rdquo;
+          Trigger &ldquo;did this resolve?&rdquo;
         </button>
         {devAskNote && (
-          <p className="fade-up text-[10.5px] leading-snug text-amber-700">{devAskNote}</p>
+          <p className="fade-up text-[10.5px] leading-snug text-[var(--warn)]">{devAskNote}</p>
         )}
       </div>
     </aside>
