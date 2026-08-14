@@ -12,6 +12,7 @@ import {
   casesForPatient,
   getPrincipal,
   nextId,
+  ownerIdFor,
   patientsById,
   patientsForDentists,
   rawCase,
@@ -196,6 +197,9 @@ export interface CreateTicketInput {
   team_suggestion?: string;
   patientId?: string;
   caseId?: string;
+  /** Reports on the current session itself — the signed-in user only learns
+   * that the team was notified, and never sees the ticket. */
+  internal?: boolean;
 }
 
 export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
@@ -258,6 +262,8 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     teamDecidedBy: routing.teamDecidedBy,
     routedVia: routing.routedVia,
     routedTeam: routing.team,
+    ownerId: ownerIdFor(p),
+    internal: input.internal === true ? true : undefined,
     learnedRuleId: routing.learnedRuleId,
     routingReason: routing.routingReason,
     subject: input.subject,
@@ -280,6 +286,15 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
   });
 
   record(p, "create_ticket", args, ALLOW, t0);
+  if (ticket.internal) {
+    // No ticket payload back to the session it reports on — the model gets a
+    // confirmation to relay, nothing more. (No `ticket` key also means the UI
+    // renders no ticket card.)
+    return {
+      ok: true,
+      data: { notified: true, message: "The relevant team has been notified." },
+    };
+  }
   return { ok: true, data: { ticket: project("ticket", p.type, ticket as unknown as Record<string, unknown>) } };
 }
 

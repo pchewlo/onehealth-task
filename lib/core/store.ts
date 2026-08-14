@@ -208,6 +208,22 @@ export function allPatientNames(): string[] {
   return PATIENTS.map((p) => p.name);
 }
 
+/**
+ * Who is accountable for a ticket raised by this principal: the practice's
+ * account manager when one exists, otherwise the practice's dentist. Staff
+ * own their own tickets.
+ */
+export function ownerIdFor(creator: Principal): string {
+  const dentistId =
+    creator.dentistId ?? (creator.patientId ? rawPatient(creator.patientId)?.dentistId : undefined);
+  if (!dentistId) return creator.id;
+  const manager = PRINCIPALS.find(
+    (s) => s.type === "internal_staff" && s.manages?.includes(dentistId),
+  );
+  if (manager) return manager.id;
+  return PRINCIPALS.find((d) => d.type === "dentist" && d.dentistId === dentistId)?.id ?? creator.id;
+}
+
 export function casesForDentists(dentistIds: string[], patientId?: string): CaseRecord[] {
   return CASES.filter(
     (c) => dentistIds.includes(c.dentistId) && (!patientId || c.patientId === patientId),

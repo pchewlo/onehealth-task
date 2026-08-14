@@ -23,10 +23,12 @@ function timeOf(ts: string): string {
  *   - drag a card between COLUMNS  → workflow status (To Do → … → Done)
  *   - change the TEAM on a card    → routing correction — the router learns
  *   - COMMENT on a card            → a note; the creator hears about it
- * All three are internal-staff affordances; everyone else gets view access.
+ * Staff and account-managed dentists get all three; a dentist with no account
+ * manager gets view access only.
  */
 export function TicketBoard({
   principal,
+  principals,
   tickets,
   comments,
   note,
@@ -36,6 +38,7 @@ export function TicketBoard({
   onComment,
 }: {
   principal: UiPrincipal;
+  principals: UiPrincipal[];
   tickets: UiTicket[];
   comments: UiComment[];
   note: CorrectionNote | null;
@@ -49,9 +52,36 @@ export function TicketBoard({
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
-  // Dentists get view access only: corrections and workflow moves are the
-  // account manager's job. (Patients never reach this board at all.)
-  const readOnly = principal.type !== "internal_staff";
+  const nameOf = (id?: string) => principals.find((p) => p.id === id)?.name ?? id ?? "—";
+
+  // Owner = the practice's account manager if one exists, else the dentist.
+  // New tickets carry ownerId from the server; this derives it for older ones.
+  const ownerOf = (t: UiTicket): string => {
+    if (t.ownerId) return nameOf(t.ownerId);
+    const creator = principals.find((p) => p.id === t.createdBy);
+    const dentistId = creator?.dentistId;
+    if (!dentistId) return creator?.name ?? "—";
+    const manager = principals.find(
+      (p) => p.type === "internal_staff" && p.manages?.includes(dentistId),
+    );
+    return (
+      manager?.name ??
+      principals.find((p) => p.type === "dentist" && p.dentistId === dentistId)?.name ??
+      creator?.name ??
+      "—"
+    );
+  };
+
+  // A dentist with an account manager works the board together with them;
+  // one without an account manager gets view access only. Staff always edit.
+  // (Patients never reach this board at all.)
+  const hasManager =
+    principal.type === "dentist" &&
+    Boolean(principal.dentistId) &&
+    principals.some(
+      (p) => p.type === "internal_staff" && p.manages?.includes(principal.dentistId!),
+    );
+  const readOnly = principal.type === "dentist" && !hasManager;
 
   const commentsFor = (ticketId: string) => comments.filter((c) => c.ticketId === ticketId);
 
@@ -68,7 +98,7 @@ export function TicketBoard({
         <h2 className="text-[13px] font-semibold">{principal.name}&rsquo;s tickets</h2>
         <span className="text-[11px] text-[var(--muted)]">
           {readOnly
-            ? "view only — routing corrections and status moves are made by your account manager"
+            ? "view only — this practice has no account manager, so ticket changes are handled internally"
             : "drag a card to update its status · change a card's team to correct routing (the router learns from it) · comments notify whoever raised the ticket"}
         </span>
       </div>
@@ -135,6 +165,13 @@ export function TicketBoard({
                     >
                       <div className="text-[11.5px] font-medium leading-snug" title={t.subject}>
                         {t.subject}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 text-[9.5px] text-[var(--muted)]">
+                        <span title="Who raised this ticket">👤 {nameOf(t.createdBy)}</span>
+                        <span>·</span>
+                        <span title="Accountable: the account manager if the practice has one, else the dentist">
+                          owner <span className="font-medium text-stone-600">{ownerOf(t)}</span>
+                        </span>
                       </div>
                       <div className="mt-1.5 flex items-center gap-1.5">
                         {readOnly ? (

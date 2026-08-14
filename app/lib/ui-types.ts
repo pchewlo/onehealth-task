@@ -33,6 +33,10 @@ export interface UiTicket {
   routingReason: string;
   teamDecidedBy?: string;
   routedVia?: "hand_rule" | "learned" | "model" | "default";
+  /** Accountable principal — account manager if the practice has one, else the dentist. */
+  ownerId?: string;
+  /** Who raised the ticket. */
+  createdBy?: string;
   refs?: { patientId?: string; caseId?: string };
 }
 
@@ -65,7 +69,7 @@ export interface UiMessage {
   notice?: { ticketId: string };
   /** An idle-triggered "did this resolve it?" prompt (app-injected, not model output). */
   resolveAsk?: boolean;
-  resolveAnswer?: "yes" | "bad_answer" | "confusion";
+  resolveAnswer?: "yes" | "bad_answer" | "confusion" | "skipped";
 }
 
 export interface UiComment {

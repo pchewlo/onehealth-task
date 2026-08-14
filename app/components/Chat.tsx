@@ -211,6 +211,9 @@ export function Chat({
   }, [messages, busy]);
 
   const chips = CHIPS[principal.id] ?? [];
+  // Patients have no ticket board, so nothing in their chat may link to one —
+  // ticket cards are a plain confirmation, and routing internals stay hidden.
+  const hasBoard = principal.type !== "patient";
 
   const send = (text: string) => {
     const t = text.trim();
@@ -262,7 +265,9 @@ export function Chat({
                     <div className="mt-1.5 text-[11.5px] text-[var(--muted)]">
                       {m.resolveAnswer === "yes"
                         ? "Thanks — logged as resolved ✓ Your next message starts a fresh conversation."
-                        : "Thanks — logged as unresolved. Your next message starts a fresh conversation."}
+                        : m.resolveAnswer === "skipped"
+                          ? "Skipped — the conversation continued."
+                          : "Thanks — logged as unresolved. Your next message starts a fresh conversation."}
                     </div>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -292,15 +297,18 @@ export function Chat({
                 // app, not spoken by the model, and styled so the difference
                 // is visible.
                 <button
-                  onClick={() => onOpenTicket(m.notice!.ticketId)}
-                  title="Open on the ticket board"
-                  className="block w-full rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-left text-[12.5px] leading-relaxed text-indigo-900 shadow-sm transition hover:border-indigo-400"
+                  onClick={() => hasBoard && onOpenTicket(m.notice!.ticketId)}
+                  disabled={!hasBoard}
+                  title={hasBoard ? "Open on the ticket board" : undefined}
+                  className={`block w-full rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-left text-[12.5px] leading-relaxed text-indigo-900 shadow-sm transition ${hasBoard ? "hover:border-indigo-400" : "cursor-default"}`}
                 >
                   <span className="mr-1.5">📣</span>
                   {m.content}{" "}
-                  <span className="ml-1 text-[11px] font-medium text-indigo-500">
-                    View on board →
-                  </span>
+                  {hasBoard && (
+                    <span className="ml-1 text-[11px] font-medium text-indigo-500">
+                      View on board →
+                    </span>
+                  )}
                   {stamp(m.ts) && (
                     <span className="ml-2 text-[10px] tabular-nums text-indigo-300">{stamp(m.ts)}</span>
                   )}
@@ -334,9 +342,10 @@ export function Chat({
                   {m.tickets?.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => onOpenTicket(t.id)}
-                      title="Open on the ticket board"
-                      className="group mt-2.5 block w-full rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5 text-left transition hover:border-[var(--accent)] hover:bg-white"
+                      onClick={() => hasBoard && onOpenTicket(t.id)}
+                      disabled={!hasBoard}
+                      title={hasBoard ? "Open on the ticket board" : undefined}
+                      className={`group mt-2.5 block w-full rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5 text-left transition ${hasBoard ? "hover:border-[var(--accent)] hover:bg-white" : "cursor-default"}`}
                     >
                       <div className="flex items-center gap-2">
                         <span
@@ -344,17 +353,23 @@ export function Chat({
                         >
                           {t.team}
                         </span>
-                        <span className="text-[12.5px] font-medium">{t.subject}</span>
+                        <span className="text-[12.5px] font-medium">
+                          {hasBoard ? t.subject : `Ticket raised: ${t.subject}`}
+                        </span>
                         <span className="ml-auto font-mono text-[10.5px] text-[var(--muted)]">
                           {t.id}
                         </span>
                       </div>
-                      <div className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
-                        {t.routingReason}
-                      </div>
-                      <div className="mt-1 text-[10.5px] font-medium text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
-                        View on board →
-                      </div>
+                      {hasBoard && (
+                        <div className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
+                          {t.routingReason}
+                        </div>
+                      )}
+                      {hasBoard && (
+                        <div className="mt-1 text-[10.5px] font-medium text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
+                          View on board →
+                        </div>
+                      )}
                     </button>
                   ))}
 

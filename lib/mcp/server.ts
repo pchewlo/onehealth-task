@@ -92,6 +92,12 @@ export async function connectGovernedServer(principal: Principal): Promise<Clien
         .describe("Your best guess at the right team (server decides)"),
       patientId: z.string().optional().describe("Related patient in your scope"),
       caseId: z.string().optional().describe("Related case in your scope"),
+      internal: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set true when the ticket reports on the current session itself (e.g. repeated denied access attempts, suspected misuse). The signed-in user will not see the ticket — tell them only that the relevant team has been notified.",
+        ),
     },
     async (input) => wrap(createTicket(principal, input)),
   );

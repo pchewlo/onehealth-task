@@ -238,8 +238,11 @@ export default function Home() {
 
   const send = async (text: string) => {
     cancelIdleAsk();
-    // Typing again dismisses an unanswered prompt — the conversation continues.
-    const withoutAsk = messages.filter((m) => !(m.resolveAsk && !m.resolveAnswer));
+    // Typing past an unanswered prompt marks it skipped — it stays in the
+    // transcript as a record, and later prompts can still fire.
+    const withoutAsk = messages.map((m) =>
+      m.resolveAsk && !m.resolveAnswer ? { ...m, resolveAnswer: "skipped" as const } : m,
+    );
     const userMsg: UiMessage = { id: uid(), role: "user", content: text, ts: new Date().toISOString() };
     const history = [...withoutAsk, userMsg];
     setConversations((c) => ({ ...c, [activeId]: history }));
@@ -588,6 +591,7 @@ export default function Home() {
         ) : tab === "tickets" && active && !isPatient ? (
           <TicketBoard
             principal={active}
+            principals={principals}
             tickets={tickets}
             comments={comments}
             note={correctionNote}

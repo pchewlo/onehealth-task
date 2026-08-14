@@ -59,6 +59,13 @@ export interface Ticket {
   /** The team the router chose at creation — a correction back to this is an
    * undo, not a lesson. */
   routedTeam?: Team;
+  /** Accountable principal: the creator's practice's account manager when one
+   * exists, otherwise the practice's dentist. Set at creation. */
+  ownerId?: string;
+  /** Reports on the session itself (e.g. denied-access escalations). Hidden
+   * from the session's own principal — they are only told the team was
+   * notified. Internal staff still see it. */
+  internal?: boolean;
   /** Set when a learned rule fired, so a correction can retire it. */
   learnedRuleId?: string;
   routingReason: string;
