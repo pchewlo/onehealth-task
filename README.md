@@ -39,8 +39,8 @@ Six one-click chips, wired per principal:
 **The closing choreography (M7 — the router that learns):**
 
 7. **Dr Tan, chip ①** — a ticket phrased to dodge every hand keyword ("track and trace shows no movement…"). No rule claims it, so the model's proposal (support) is accepted — a mis-route, visibly badged "model proposal".
-8. **In the tickets panel** — click the team badge, reassign to **ops**. The panel shows what just happened: *Router learned: trace+shows+movement → ops*.
-9. **Dr Tan, chip ②** — the probe: same shape of problem, different patient. It routes to **ops** via the learned rule, outranking the model's guess. Badged "learned rule".
+8. **Switch to Priya** — workflow ownership means the account manager, not the managed dentist, corrects routing. On her board, change the ticket's team to **ops**. The card shows what just happened: *Router learned: trace+shows+movement → ops*. (Dr Tan attempting the same correction is refused server-side — proof test 10 asserts it.)
+9. **Back as Dr Tan, chip ②** — the probe: same shape of problem, different patient. It routes to **ops** via the learned rule, outranking the model's guess. Badged "learned rule".
 
 The safety property is the architecture, and it is asserted, not asserted-about: proof test 10 verifies a learned rule cannot change the routing of anything a hand rule claims, and that corrections in hand-rule territory are recorded as evidence only — never auto-applied. Hand rules always win; learning proposes, policy decides.
 

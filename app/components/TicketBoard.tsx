@@ -79,7 +79,17 @@ export function TicketBoard({
     principals.some(
       (p) => p.type === "internal_staff" && p.manages?.includes(principal.dentistId!),
     );
-  const readOnly = principal.type === "dentist" && !hasManager;
+  // Workflow rights follow ownership: the AM runs her managed practices'
+  // boards, so a MANAGED dentist views and comments while their AM moves and
+  // reroutes; an unmanaged dentist has no AM and self-serves. Enforced
+  // server-side in canManageTicket — this flag only shapes the UI.
+  const readOnly = principal.type === "dentist" && hasManager;
+  const managerName =
+    principal.type === "dentist" && principal.dentistId
+      ? principals.find(
+          (p) => p.type === "internal_staff" && p.manages?.includes(principal.dentistId!),
+        )?.name
+      : undefined;
 
   const commentsFor = (ticketId: string) => comments.filter((c) => c.ticketId === ticketId);
 
@@ -96,7 +106,7 @@ export function TicketBoard({
         <h2 className="text-[13px] font-semibold">{principal.name}&rsquo;s tickets</h2>
         <span className="text-[11px] text-[var(--ink-3)]">
           {readOnly
-            ? "view only — this practice has no account manager"
+            ? `view only — ${managerName ?? "your account manager"} runs this board · comment to flag anything`
             : "drag to move · change a team to correct routing (the router learns from it) · comments notify whoever raised the ticket"}
         </span>
       </div>
@@ -198,7 +208,7 @@ export function TicketBoard({
                         <span className="ml-auto font-mono tabular-nums">{timeOf(t.createdAt)}</span>
                       </div>
 
-                      {(!readOnly || tComments.length > 0) && (
+                      {(
                         <button
                           onClick={() => {
                             setDraft("");
@@ -225,7 +235,7 @@ export function TicketBoard({
                               <div className="text-[var(--ink)]">{c.text}</div>
                             </div>
                           ))}
-                          {!readOnly && (
+                          {(
                             <form
                               onSubmit={(e) => {
                                 e.preventDefault();

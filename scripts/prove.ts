@@ -234,9 +234,14 @@ async function main() {
     const baitTicket = bait.ok ? (bait.data as any).ticket : null;
     const baitFellThrough = Boolean(bait.ok && baitTicket.team === "support");
 
-    // The human corrects it to ops → the router learns.
+    // The human corrects it to ops → the router learns. Workflow ownership:
+    // Dr Tan is managed, so the correction is her ACCOUNT MANAGER's to make —
+    // and a managed dentist attempting it must be refused.
+    const tanCannotCorrect = baitTicket
+      ? !correctTicket(tan.id, baitTicket.id, "ops", allPatientNames()).ok
+      : false;
     const correction = baitTicket
-      ? correctTicket(tan.id, baitTicket.id, "ops", allPatientNames())
+      ? correctTicket(priya.id, baitTicket.id, "ops", allPatientNames())
       : { ok: false as const };
     const learnedSomething = correction.ok && "learned" in correction && Boolean(correction.learned);
 
@@ -264,7 +269,7 @@ async function main() {
     const handT = handTicket.ok ? (handTicket.data as any).ticket : null;
     const rulesBefore = learnedRules().length;
     const handCorrection = handT
-      ? correctTicket(tan.id, handT.id, "clinical", allPatientNames())
+      ? correctTicket(priya.id, handT.id, "clinical", allPatientNames())
       : { ok: false as const };
     const handRefused =
       handCorrection.ok &&
@@ -274,9 +279,9 @@ async function main() {
 
     check(
       "10. Learning proposes, policy decides",
-      "bait falls through → correction teaches → probe caught; hand rules untouched; hand-territory corrections record only",
-      `fellThrough=${baitFellThrough} learned=${learnedSomething} isolated=${isolated} caught=${caught} handRefused=${handRefused}`,
-      baitFellThrough && learnedSomething && isolated && caught && handRefused,
+      "bait falls through → managed dentist refused → AM's correction teaches → probe caught; hand rules untouched; hand-territory corrections record only",
+      `fellThrough=${baitFellThrough} tanRefused=${tanCannotCorrect} learned=${learnedSomething} isolated=${isolated} caught=${caught} handRefused=${handRefused}`,
+      baitFellThrough && tanCannotCorrect && learnedSomething && isolated && caught && handRefused,
     );
     if (learnedSomething && correction.ok && correction.learned) {
       console.log(

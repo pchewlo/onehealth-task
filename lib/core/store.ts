@@ -285,6 +285,26 @@ export function ticketsVisibleTo(p: Principal): Ticket[] {
   });
 }
 
+/**
+ * Workflow rights (move status, reassign team) follow OWNERSHIP, which is
+ * narrower than visibility: the account manager owns her managed practices'
+ * boards; a dentist with no account manager owns their own. A managed
+ * dentist sees and comments, but the board is their AM's to run. Patients
+ * never manage workflow.
+ */
+export function canManageTicket(p: Principal, t: Ticket): boolean {
+  if (t.internal && p.type !== "internal_staff") return false;
+  if (p.type === "internal_staff") return inBookOf(p, t.createdBy);
+  if (p.type === "dentist") {
+    if (t.createdBy !== p.id) return false;
+    const hasManager = PRINCIPALS.some(
+      (s) => s.type === "internal_staff" && s.manages?.includes(p.dentistId ?? ""),
+    );
+    return !hasManager;
+  }
+  return false;
+}
+
 export function allTickets(): Ticket[] {
   return state().tickets;
 }
@@ -294,11 +314,11 @@ export function reassignTicket(
   principalId: string,
   toTeam: Ticket["team"],
 ): { ok: true; from: Ticket["team"]; ticket: Ticket } | { ok: false } {
-  // Reassignment scope = visibility scope: an account manager correcting a
-  // managed dentist's ticket is exactly the correction signal the router
-  // learns from.
+  // Reassignment requires workflow OWNERSHIP, not mere visibility — the AM
+  // correcting a managed practice's routing is exactly the signal the router
+  // learns from; a managed dentist flags via comments instead.
   const p = getPrincipal(principalId);
-  const t = p ? state().tickets.find((x) => x.id === id && inBookOf(p, x.createdBy)) : undefined;
+  const t = p ? state().tickets.find((x) => x.id === id && canManageTicket(p, x)) : undefined;
   if (!t) return { ok: false };
   const from = t.team;
   t.team = toTeam;
@@ -325,15 +345,15 @@ export function notificationsFor(p: Principal): TicketNotification[] {
   return state().notifications.filter((n) => n.forPrincipalId === p.id);
 }
 
-/** Move a ticket across the board. Same scope as reassignment: your own
- * tickets, or — for staff — your managed book's. */
+/** Move a ticket across the board. Same rule as reassignment: workflow
+ * ownership, not mere visibility. */
 export function setTicketStatus(
   id: string,
   principalId: string,
   toStatus: TicketStatus,
 ): { ok: true; from: TicketStatus; ticket: Ticket } | { ok: false } {
   const p = getPrincipal(principalId);
-  const t = p ? state().tickets.find((x) => x.id === id && inBookOf(p, x.createdBy)) : undefined;
+  const t = p ? state().tickets.find((x) => x.id === id && canManageTicket(p, x)) : undefined;
   if (!t) return { ok: false };
   const from = t.status;
   t.status = toStatus;
