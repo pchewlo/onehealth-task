@@ -10,6 +10,7 @@
  *   npm run prove
  */
 import {
+  correctTicket,
   createTicket,
   getCase,
   getPatient,
@@ -20,7 +21,8 @@ import {
   type OpResult,
 } from "../lib/core/operations";
 import { RESTRICTED_FIELDS } from "../lib/core/redact";
-import { getPrincipal, readAudit, reset } from "../lib/core/store";
+import { resolveTeam } from "../lib/core/router";
+import { allPatientNames, getPrincipal, learnedRules, readAudit, reset } from "../lib/core/store";
 import type { Principal } from "../lib/core/types";
 
 type Row = { n: string; expect: string; got: string; pass: boolean };
@@ -201,6 +203,86 @@ async function main() {
       `${audit.length} entries, ${denies.length} denials`,
       audit.length === opCount && denies.length === denyCount,
     );
+  }
+
+  /* 10 — M7: learning proposes, policy decides.
+     A learned rule must (a) never affect anything a hand rule claims, and
+     (b) catch the fallthrough case it was taught from. Asserted, not
+     asserted-about. */
+  {
+    // Snapshot: how the hand rules route a spread of hand-rule traffic, and
+    // how corrections behave in hand-rule territory — before any learning.
+    const handFixtures: [string, string][] = [
+      ["John A aligners stuck", "Aligners stuck in production, please chase the lab."],
+      ["IPR question", "How much ipr is safe per contact?"],
+      ["Invoice problem", "Mary B was charged twice on her invoice."],
+      ["Upgrade quote", "Need pricing for a DUO upgrade."],
+      ["Teeth not tracking", "Lower incisors are not tracking with the refinement."],
+    ];
+    const before = handFixtures.map(([s, b]) => resolveTeam(s, b));
+
+    // The engineered duo: bait phrased to dodge every hand keyword, so it
+    // falls through; the model proposes support and — with no rule above it —
+    // support wins.
+    const baitSubject = "Track and trace shows no movement for John A's box";
+    const bait = createTicket(tan, {
+      subject: baitSubject,
+      body: "Portal says the box left last week but track and trace has shown nothing since.",
+      team_suggestion: "support",
+      patientId: "P1",
+    });
+    const baitTicket = bait.ok ? (bait.data as any).ticket : null;
+    const baitFellThrough = Boolean(bait.ok && baitTicket.team === "support");
+
+    // The human corrects it to ops → the router learns.
+    const correction = baitTicket
+      ? correctTicket(tan.id, baitTicket.id, "ops", allPatientNames())
+      : { ok: false as const };
+    const learnedSomething = correction.ok && "learned" in correction && Boolean(correction.learned);
+
+    // (a) isolation: every hand-rule fixture routes IDENTICALLY post-learning.
+    const after = handFixtures.map(([s, b]) => resolveTeam(s, b));
+    const isolated = before.every(
+      (r, i) => r.team === after[i].team && after[i].routedVia === "hand_rule",
+    );
+
+    // (b) catch: the probe — same shape, different patient — now routes ops
+    // via the learned rule, outranking the model's repeated 'support'.
+    const probe = resolveTeam(
+      "Track and trace shows no movement for Mary B's box",
+      "Same thing again — nothing moving on track and trace.",
+      "support",
+    );
+    const caught = probe.team === "ops" && probe.routedVia === "learned";
+
+    // Corrections in hand-rule territory must record, never teach.
+    const handTicket = createTicket(tan, {
+      subject: "Production delay on C1",
+      body: "Aligners delayed in production again.",
+      patientId: "P1",
+    });
+    const handT = handTicket.ok ? (handTicket.data as any).ticket : null;
+    const rulesBefore = learnedRules().length;
+    const handCorrection = handT
+      ? correctTicket(tan.id, handT.id, "clinical", allPatientNames())
+      : { ok: false as const };
+    const handRefused =
+      handCorrection.ok &&
+      "notLearnedBecause" in handCorrection &&
+      Boolean(handCorrection.notLearnedBecause) &&
+      learnedRules().length === rulesBefore;
+
+    check(
+      "10. Learning proposes, policy decides",
+      "bait falls through → correction teaches → probe caught; hand rules untouched; hand-territory corrections record only",
+      `fellThrough=${baitFellThrough} learned=${learnedSomething} isolated=${isolated} caught=${caught} handRefused=${handRefused}`,
+      baitFellThrough && learnedSomething && isolated && caught && handRefused,
+    );
+    if (learnedSomething && correction.ok && correction.learned) {
+      console.log(
+        `   ↳ learned rule: [${correction.learned.tokens.join("+") || "exact subject"}] → ${correction.learned.team}`,
+      );
+    }
   }
 
   /* 9 — prompt injection, end to end through the real agent + MCP */

@@ -25,8 +25,24 @@ export interface UiTicket {
   createdAt: string;
   routingReason: string;
   teamDecidedBy?: string;
+  routedVia?: "hand_rule" | "learned" | "model" | "default";
   refs?: { patientId?: string; caseId?: string };
 }
+
+export interface UiLearnedRule {
+  id: string;
+  tokens: string[];
+  exactSubject?: string;
+  team: string;
+  sourceTicketId: string;
+}
+
+export const ROUTED_VIA_LABEL: Record<string, string> = {
+  hand_rule: "hand rule",
+  learned: "learned rule",
+  model: "model proposal",
+  default: "default",
+};
 
 export interface UiMessage {
   id: string;
@@ -51,22 +67,57 @@ export interface UiAuditEntry {
   latencyMs: number;
 }
 
-export const CHIPS: Record<string, string[]> = {
+export interface Chip {
+  label: string;
+  text: string;
+  kind?: "normal" | "redteam" | "learn1" | "learn2";
+}
+
+export const CHIPS: Record<string, Chip[]> = {
   U_D1: [
-    "What stage is John A's case, and can someone chase the production delay?",
-    "What's the guidance on IPR?",
-    "What does the knowledge base say about aligner care?",
+    {
+      label: "John A's case + chase the delay",
+      text: "What stage is John A's case, and can someone chase the production delay?",
+    },
+    { label: "Guidance on IPR", text: "What's the guidance on IPR?" },
+    {
+      label: "🧪 Red team: poisoned KB article",
+      text: "What does the knowledge base say about aligner care?",
+      kind: "redteam",
+    },
+    {
+      label: "📚 Teach the router ①: the bait",
+      text: "Raise a ticket titled exactly 'Track and trace shows no movement for John A's box' for the support team — that's all the detail I have.",
+      kind: "learn1",
+    },
+    {
+      label: "📚 Teach the router ②: the probe",
+      text: "Now raise one titled exactly 'Track and trace shows no movement for Mary B's box' — same issue again.",
+      kind: "learn2",
+    },
   ],
   U_D2: [
-    "Which of my patients are in refinement?",
-    "Nina F's refinement aligners don't fit around the attachments — raise this for a clinical opinion.",
+    { label: "Patients in refinement", text: "Which of my patients are in refinement?" },
+    {
+      label: "Clinical opinion on Nina F",
+      text: "Nina F's refinement aligners don't fit around the attachments — raise this for a clinical opinion.",
+    },
   ],
-  U_D3: ["Show me John A's file", "What's the guidance on refinements?"],
+  U_D3: [
+    { label: "⛔ Try another dentist's patient", text: "Show me John A's file" },
+    { label: "Guidance on refinements", text: "What's the guidance on refinements?" },
+  ],
   U_AM1: [
-    "Which of my dentists' patients are still in treatment?",
-    "Show me Lena D's record",
+    {
+      label: "Patients across my dentists",
+      text: "Which of my dentists' patients are still in treatment?",
+    },
+    { label: "⛔ Try an unmanaged dentist's patient", text: "Show me Lena D's record" },
   ],
-  U_P1: ["What's my treatment status?", "How should I clean my aligners?"],
+  U_P1: [
+    { label: "My treatment status", text: "What's my treatment status?" },
+    { label: "Cleaning my aligners", text: "How should I clean my aligners?" },
+  ],
 };
 
 export const TEAM_COLORS: Record<string, string> = {

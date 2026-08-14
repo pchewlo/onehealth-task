@@ -51,13 +51,34 @@ export interface Ticket {
   team: Team;
   /** What the model asked for, recorded even when the server overrode it. */
   teamProposedByModel?: string;
-  teamDecidedBy: "rules" | "model_confirmed";
+  teamDecidedBy: "rules" | "model_confirmed" | "learned" | "model";
+  /** Which tier of the routing precedence actually decided the team. */
+  routedVia: "hand_rule" | "learned" | "model" | "default";
+  /** Set when a learned rule fired, so a correction can retire it. */
+  learnedRuleId?: string;
   routingReason: string;
   subject: string;
   body: string;
   refs?: { patientId?: string; caseId?: string };
   createdAt: string;
   status: "open";
+}
+
+/**
+ * M7 — a rule the router learned from a human correction.
+ * Learned rules exist ONLY to fill the default-fallthrough gap; they are never
+ * consulted when a hand rule matches (see resolveTeam).
+ */
+export interface LearnedRule {
+  id: string;
+  /** Content tokens extracted from the corrected ticket's subject. */
+  tokens: string[];
+  /** Fallback when token extraction yields nothing: exact subject match. */
+  exactSubject?: string;
+  team: Team;
+  /** The ticket whose correction taught this rule. */
+  sourceTicketId: string;
+  createdAt: string;
 }
 
 export interface AuditEntry {
@@ -121,7 +142,7 @@ export interface MetricEvent {
   team?: Team;
   fromTeam?: Team;
   toTeam?: Team;
-  routedBy?: "rules" | "model_confirmed";
+  routedBy?: "rules" | "model_confirmed" | "learned" | "model";
   /** conversation_end */
   resolved?: boolean;
   reason?: UnresolvedReason;

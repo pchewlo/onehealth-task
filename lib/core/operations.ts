@@ -1,8 +1,9 @@
 import { record } from "./audit";
 import { authorize, visibleDentistIds } from "./policy";
 import { project, projectMany } from "./redact";
-import { routeTicket } from "./router";
+import { extractTokens, isLearnable, resolveTeam } from "./router";
 import {
+  addLearnedRule,
   addTicket,
   appendEvent,
   casesForDentists,
@@ -12,10 +13,12 @@ import {
   patientsForDentists,
   rawCase,
   rawPatient,
+  reassignTicket,
+  retireLearnedRule,
   searchKb,
   ticketsBy,
 } from "./store";
-import type { Decision, Principal, Ticket } from "./types";
+import type { Decision, LearnedRule, Principal, Team, Ticket } from "./types";
 
 /**
  * The seven governed operations.
@@ -239,7 +242,7 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     return denied(base);
   }
 
-  const routing = routeTicket(input.subject, input.body, input.team_suggestion);
+  const routing = resolveTeam(input.subject, input.body, input.team_suggestion);
   const ticket: Ticket = {
     id: nextId("T"),
     createdBy: p.id,
@@ -247,6 +250,8 @@ export function createTicket(p: Principal, input: CreateTicketInput): OpResult {
     team: routing.team,
     teamProposedByModel: routing.teamProposedByModel,
     teamDecidedBy: routing.teamDecidedBy,
+    routedVia: routing.routedVia,
+    learnedRuleId: routing.learnedRuleId,
     routingReason: routing.routingReason,
     subject: input.subject,
     body: input.body,
@@ -282,6 +287,78 @@ export function listMyTickets(p: Principal): OpResult {
   const rows = ticketsBy(p.id) as unknown as Record<string, unknown>[];
   record(p, "list_my_tickets", {}, ALLOW, t0);
   return { ok: true, data: { tickets: projectMany("ticket", p.type, rows), count: rows.length } };
+}
+
+/* ---------------- Correction → learning (M7, not a model-facing tool) ---------------- */
+
+export interface CorrectionResult {
+  ok: boolean;
+  from?: Team;
+  /** Present when the correction taught the router something. */
+  learned?: LearnedRule;
+  /** Present when the correction retired a mis-firing learned rule. */
+  retiredRuleId?: string;
+  /** Present when policy forbade learning (hand-rule territory). */
+  notLearnedBecause?: string;
+}
+
+/**
+ * A human reassigning a ticket's team is the correction signal. What it is
+ * allowed to teach is decided HERE, by policy, not by the learner:
+ *
+ *  - ticket was routed via default/model  → learn a rule for the gap
+ *  - ticket was routed via a learned rule → the rule was wrong; retire it
+ *  - ticket was routed via a HAND rule    → record only. Hand rules are
+ *    changed by humans editing the table, never by the learner. The stored
+ *    disagreement is the evidence for that edit.
+ */
+export function correctTicket(
+  principalId: string,
+  ticketId: string,
+  toTeam: Team,
+  patientNames: string[],
+): CorrectionResult {
+  const res = reassignTicket(ticketId, principalId, toTeam);
+  if (!res.ok) return { ok: false };
+  const t = res.ticket;
+
+  appendEvent({
+    id: nextId("ev"),
+    ts: new Date().toISOString(),
+    type: "ticket_reassigned",
+    principalId,
+    conversationId: "",
+    fromTeam: res.from,
+    toTeam,
+  });
+
+  if (t.routedVia === "learned" && t.learnedRuleId) {
+    retireLearnedRule(t.learnedRuleId);
+    return { ok: true, from: res.from, retiredRuleId: t.learnedRuleId };
+  }
+
+  if (!isLearnable(t.routedVia)) {
+    return {
+      ok: true,
+      from: res.from,
+      notLearnedBecause:
+        "routed by a hand rule — corrections there are recorded as evidence for editing the hand table, never auto-applied",
+    };
+  }
+
+  const tokens = extractTokens(t.subject, patientNames);
+  const rule: LearnedRule = {
+    id: nextId("LR"),
+    tokens,
+    // Fallback when extraction yields nothing: exact-match the subject line.
+    // Crude, but the loop still demos — ship beats elegant.
+    exactSubject: tokens.length ? undefined : t.subject.trim().toLowerCase(),
+    team: toTeam,
+    sourceTicketId: t.id,
+    createdAt: new Date().toISOString(),
+  };
+  addLearnedRule(rule);
+  return { ok: true, from: res.from, learned: rule };
 }
 
 /** Convenience for the UI, not exposed as a tool. */

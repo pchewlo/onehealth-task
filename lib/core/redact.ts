@@ -24,7 +24,7 @@ const ALLOWLIST: Record<ResourceKind, Partial<Record<PrincipalType | "any", read
   case: { any: ["id", "dentistId", "patientId", "type", "stage"] },
   kb: { any: ["id", "topic", "title", "body"] },
   ticket: {
-    any: ["id", "team", "subject", "status", "createdAt", "routingReason", "teamDecidedBy", "refs"],
+    any: ["id", "team", "subject", "status", "createdAt", "routingReason", "teamDecidedBy", "routedVia", "refs"],
   },
 } as const;
 

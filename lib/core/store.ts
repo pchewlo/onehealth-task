@@ -3,6 +3,7 @@ import type {
   AuditEntry,
   CaseRecord,
   KbRecord,
+  LearnedRule,
   MetricEvent,
   PatientRecord,
   Principal,
@@ -28,6 +29,7 @@ interface MutableState {
   tickets: Ticket[];
   audit: AuditEntry[];
   events: MetricEvent[];
+  learnedRules: LearnedRule[];
   seq: number;
   backfilled: boolean;
 }
@@ -36,7 +38,7 @@ const g = globalThis as unknown as { __ohState?: MutableState };
 
 function state(): MutableState {
   if (!g.__ohState) {
-    g.__ohState = { tickets: [], audit: [], events: [], seq: 0, backfilled: false };
+    g.__ohState = { tickets: [], audit: [], events: [], learnedRules: [], seq: 0, backfilled: false };
   }
   return g.__ohState;
 }
@@ -73,6 +75,11 @@ export function patientsForDentists(dentistIds: string[]): PatientRecord[] {
 
 export function patientsById(ids: string[]): PatientRecord[] {
   return PATIENTS.filter((p) => ids.includes(p.id));
+}
+
+/** For the learner's token filter — person names must never become rules. */
+export function allPatientNames(): string[] {
+  return PATIENTS.map((p) => p.name);
 }
 
 export function casesForDentists(dentistIds: string[], patientId?: string): CaseRecord[] {
@@ -116,13 +123,28 @@ export function reassignTicket(
   id: string,
   principalId: string,
   toTeam: Ticket["team"],
-): { ok: true; from: Ticket["team"] } | { ok: false } {
+): { ok: true; from: Ticket["team"]; ticket: Ticket } | { ok: false } {
   const t = state().tickets.find((x) => x.id === id && x.createdBy === principalId);
   if (!t) return { ok: false };
   const from = t.team;
   t.team = toTeam;
   t.routingReason = `${t.routingReason} · reassigned by human to ${toTeam}`;
-  return { ok: true, from };
+  return { ok: true, from, ticket: t };
+}
+
+/* ---------------- Learned rules (M7) ---------------- */
+
+export function addLearnedRule(r: LearnedRule): void {
+  state().learnedRules.push(r);
+}
+
+export function learnedRules(): LearnedRule[] {
+  return state().learnedRules;
+}
+
+export function retireLearnedRule(id: string): void {
+  const s = state();
+  s.learnedRules = s.learnedRules.filter((r) => r.id !== id);
 }
 
 /* ---------------- Audit ---------------- */
@@ -160,6 +182,7 @@ export function reset(): void {
   s.tickets = [];
   s.audit = [];
   s.events = [];
+  s.learnedRules = [];
   s.seq = 0;
   s.backfilled = false;
 }

@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./components/Chat";
 import { MetricsTab } from "./components/MetricsTab";
 import { PrincipalSwitcher } from "./components/PrincipalSwitcher";
-import { AuditLog, TicketsPanel } from "./components/RightRail";
+import { AuditLog, TicketsPanel, type CorrectionNote } from "./components/RightRail";
 import type {
   UiAuditEntry,
+  UiLearnedRule,
   UiMessage,
   UiPrincipal,
   UiTicket,
@@ -26,6 +27,8 @@ export default function Home() {
   const [keyMissing, setKeyMissing] = useState(false);
   const [audit, setAudit] = useState<UiAuditEntry[]>([]);
   const [tickets, setTickets] = useState<UiTicket[]>([]);
+  const [learnedRules, setLearnedRules] = useState<UiLearnedRule[]>([]);
+  const [correctionNote, setCorrectionNote] = useState<CorrectionNote | null>(null);
 
   // One conversation id per principal per page load — feeds the metric events.
   const convIds = useRef<Record<string, string>>({});
@@ -47,6 +50,7 @@ export default function Home() {
     ]);
     setAudit(a.audit ?? []);
     setTickets(t.tickets ?? []);
+    setLearnedRules(t.learnedRules ?? []);
   }, []);
 
   useEffect(() => {
@@ -212,15 +216,43 @@ export default function Home() {
 
       {tab === "chat" && (
         <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-[var(--line)] bg-white/60">
-          <AuditLog entries={audit} />
+          <AuditLog
+            entries={audit}
+            nameOf={(id) => principals.find((p) => p.id === id)?.name ?? id}
+          />
           <TicketsPanel
             tickets={tickets}
+            learnedRules={learnedRules}
+            note={correctionNote}
             onReassign={async (ticketId, team) => {
-              await fetch("/api/tickets", {
+              const r = await fetch("/api/tickets", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ principalId: activeId, ticketId, team }),
               });
+              const j = await r.json();
+              if (r.ok) {
+                const note: CorrectionNote = j.learned
+                  ? {
+                      ticketId,
+                      kind: "learned",
+                      detail: `📚 Router learned: ${
+                        j.learned.tokens?.length
+                          ? j.learned.tokens.join("+")
+                          : "this exact subject"
+                      } → ${team}`,
+                    }
+                  : j.retiredRuleId
+                    ? { ticketId, kind: "retired", detail: "Mis-firing learned rule retired." }
+                    : {
+                        ticketId,
+                        kind: "recorded",
+                        detail:
+                          "Recorded as correction signal — hand-rule territory, so nothing auto-changes.",
+                      };
+                setCorrectionNote(note);
+                setTimeout(() => setCorrectionNote((n) => (n === note ? null : n)), 8000);
+              }
               refreshRails(activeId);
             }}
           />

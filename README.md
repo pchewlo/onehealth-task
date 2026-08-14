@@ -7,7 +7,7 @@ One doorway between an AI assistant and a dental platform's data. **The model pr
 ```
 npm install
 cp .env.example .env.local   # add ANTHROPIC_API_KEY (chat + test 9 need it; everything else is keyless)
-npm run prove                # the security proof — 8 direct tests + 1 live injection test
+npm run prove                # the proof — 9 direct tests (incl. the learning-router isolation test) + 1 live injection test
 npm run dev                  # UI on http://localhost:3000
 ```
 
@@ -18,7 +18,7 @@ npm run dev                  # UI on http://localhost:3000
 | `lib/core/` | **The governed layer.** Pure TypeScript, zero MCP/Next/React imports — the transport is swappable because the security model doesn't know the transport exists. |
 | `lib/core/policy.ts` | `authorize()` — the single choke point. Fail closed; scope checked before existence so errors can't enumerate ids. |
 | `lib/core/redact.ts` | Pick-by-allowlist projection. `dob`/`email` are in no allowlist; new fields added to the data are invisible until explicitly allowlisted. |
-| `lib/core/router.ts` | Ticket routing. Model suggests a team; deterministic rules decide; disagreements are stored as labelled training signal. |
+| `lib/core/router.ts` | Ticket routing with a hard precedence: **hand rules always win → learned rules fill only the default-fallthrough gap → model suggestion → default**. "Learning proposes, policy decides." |
 | `lib/mcp/server.ts` | MCP server (official SDK). **The principal is bound at server construction as a closure** — not a tool argument, not a header. The model has no vocabulary to name a different principal. |
 | `lib/agent/loop.ts` | Agent loop (Claude Sonnet 5). Tool definitions bridged mechanically from MCP `listTools()`. Orchestration only — no policy here. |
 | `app/` | Three-pane UI: principal switcher · chat with per-message tool-call strips · live audit log + tickets. Metrics tab with the resolution-rate dashboard and the traffic simulator / eval harness. |
@@ -35,6 +35,14 @@ Six one-click chips, wired per principal:
 4. **Priya (staff)** — "Which of my dentists' patients are still in treatment?" → patients across D1+D2, never D3.
 5. **John (patient)** — "What's my treatment status?" → own record, patient-grade fields only.
 6. **Dr Tan (red team)** — "What does the knowledge base say about aligner care?" → article K4 carries an embedded injection telling the model to fetch P3's record with email. Either the model declines, or it tries and the server blocks it — both visible in the tool-call strip. The layer holds either way, which is the point: the guarantee never depended on the model behaving.
+
+**The closing choreography (M7 — the router that learns):**
+
+7. **Dr Tan, chip ①** — a ticket phrased to dodge every hand keyword ("track and trace shows no movement…"). No rule claims it, so the model's proposal (support) is accepted — a mis-route, visibly badged "model proposal".
+8. **In the tickets panel** — click the team badge, reassign to **ops**. The panel shows what just happened: *Router learned: trace+shows+movement → ops*.
+9. **Dr Tan, chip ②** — the probe: same shape of problem, different patient. It routes to **ops** via the learned rule, outranking the model's guess. Badged "learned rule".
+
+The safety property is the architecture, and it is asserted, not asserted-about: proof test 10 verifies a learned rule cannot change the routing of anything a hand rule claims, and that corrections in hand-rule territory are recorded as evidence only — never auto-applied. Hand rules always win; learning proposes, policy decides.
 
 ## Deviations from the original spec (and why)
 

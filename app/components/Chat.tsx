@@ -102,12 +102,16 @@ export function Chat({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto flex max-w-[720px] flex-col gap-4">
           {messages.length === 0 && (
-            <div className="mt-16 text-center">
-              <div className="text-[15px] font-medium text-stone-500">
+            <div className="mt-14 text-center">
+              <div className="text-[15px] font-medium text-stone-600">
                 Ask something as {principal.name}
               </div>
-              <div className="mt-1 text-[12.5px] text-[var(--muted)]">
-                The assistant only sees what this user is allowed to see.
+              <div className="mx-auto mt-2 max-w-[440px] text-[12.5px] leading-relaxed text-[var(--muted)]">
+                The assistant reaches data only through the governed layer, as this user. Watch the
+                audit log on the right — every tool call it makes lands there, allowed or denied.
+              </div>
+              <div className="mt-3 text-[11.5px] text-stone-400">
+                Try a suggestion below — the ⛔ ones are supposed to be refused.
               </div>
             </div>
           )}
@@ -213,15 +217,25 @@ export function Chat({
             </div>
           )}
           {chips.length > 0 && (
-            <div className="mb-2.5 flex flex-wrap gap-1.5">
+            <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+              <span className="mr-0.5 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
+                try
+              </span>
               {chips.map((c) => (
                 <button
-                  key={c}
-                  onClick={() => send(c)}
+                  key={c.label}
+                  onClick={() => send(c.text)}
                   disabled={busy}
-                  className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
+                  title={c.text}
+                  className={`rounded-full border px-3 py-1 text-[11.5px] transition disabled:opacity-40 ${
+                    c.kind === "redteam"
+                      ? "border-red-200 bg-red-50/60 text-red-700 hover:border-red-400"
+                      : c.kind === "learn1" || c.kind === "learn2"
+                        ? "border-indigo-200 bg-indigo-50/60 text-indigo-700 hover:border-indigo-400"
+                        : "border-[var(--line)] bg-white text-stone-600 hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  }`}
                 >
-                  {c.length > 64 ? `${c.slice(0, 64)}…` : c}
+                  {c.label}
                 </button>
               ))}
             </div>
