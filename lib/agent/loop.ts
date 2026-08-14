@@ -55,6 +55,21 @@ export async function runAgent(input: {
   const mcp = await connectGovernedServer(principal);
   const anthropic = new Anthropic();
 
+  // Who-am-I-serving context, appended server-side. This is information, not
+  // authority — the model knowing the user's name and id changes which tool it
+  // reaches for first; it changes nothing about what authorize() will allow.
+  // (Found by the eval harness: a patient asking "what's my status?" tripped a
+  // FORBIDDEN_TYPE denial en route because the model had to discover its own id.)
+  const identity = `\n\nCurrently signed in: ${principal.name} (${principal.type.replace("_", " ")}${
+    principal.dentistId
+      ? `, dentist id ${principal.dentistId}`
+      : principal.patientId
+        ? `, patient id ${principal.patientId} — use get_patient/list_cases with this id for their own records`
+        : principal.manages?.length
+          ? `, manages dentists ${principal.manages.join(", ")}`
+          : ""
+  }).`;
+
   // Bridge MCP tool definitions → Anthropic tool definitions, mechanically.
   const { tools: mcpTools } = await mcp.listTools();
   const tools: Anthropic.Tool[] = mcpTools.map((t) => ({
@@ -78,7 +93,7 @@ export async function runAgent(input: {
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT + identity,
       tools,
       messages,
     });

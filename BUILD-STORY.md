@@ -166,7 +166,19 @@ constrains whichever model is behind the door — the guarantee doesn't care.
    The build continued regardless because tests 1–8, the UI, and the metrics are keyless by
    design — worth a line about designing the build so the expensive dependency is optional.
 
-6. **SDK types lag the API.** The installed TypeScript SDK's types predated the `adaptive`
+6. **The eval harness earned its keep on its first run.** 12/15. All three failures were
+   diagnoses, not noise. Two fixtures expected `denied` but the model checked its patient list
+   first and answered "not in your scope" *without attempting the forbidden read* — genuinely
+   better behaviour than the label anticipated; the labels had been written against an assumed
+   path rather than an outcome (fixed by making them direct id-probes the model can't sidestep).
+   The third was a real product gap: the assistant didn't know *who it was serving*, so a
+   patient asking "what's my status?" tripped a denial en route while the model discovered its
+   own id. Fix: the signed-in user's name and id are appended to the system prompt server-side —
+   information, not authority; it changes which tool the model reaches for first and nothing
+   about what the server allows. Line available: "the harness's first three failures were a
+   design review I didn't have to schedule."
+
+7. **SDK types lag the API.** The installed TypeScript SDK's types predated the `adaptive`
    thinking literal. Rather than fighting typings with casts, omitted the field — adaptive is
    the default on Sonnet 5 anyway. Boring resolution, worth including as an example of not
    spending an hour on a fight with no prize.
