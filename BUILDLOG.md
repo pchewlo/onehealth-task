@@ -26,6 +26,13 @@ Honest record of how this was built and where AI did the work. Feeds the "where 
 - All AI-generated in one pass: three-pane layout, tool-call strips, audit polling, ticket reassignment, metrics fold, deterministic synthetic backfill (xorshift-seeded so it's identical across boots), simulator with expected-vs-actual table.
 - `tsc --noEmit` and `next build` clean on second attempt (first had two type errors in generic constraints on the projection helper).
 
+## M7 — learning router (~40 min)
+
+- Scope added after M1–M6 shipped: a router that learns from ticket reassignments, under a precedence that keeps the guarantee (hand rules always win; learned rules only fill the default-fallthrough gap; model suggestion below that).
+- The engineered demo pair needed real care: the bait's phrasing must dodge every hand keyword AND the live model rewrites ticket subjects, so the chips instruct the model to quote the title verbatim. The token extractor's hand-keyword filter correctly rejected "track" (overlaps the "tracking" hand keyword) and learned from trace+shows+movement instead — the conservative filter working as designed on the first real input.
+- Proof test 10 asserts five things at once: bait falls through, correction teaches, hand-rule fixtures route identically post-learning, the probe is caught by the learned rule, and hand-territory corrections record without teaching. Green first run after one type fix.
+- Fallback (exact-subject match) implemented for when token extraction yields nothing — ship beats elegant.
+
 ## Tools used
 
 - **Claude Code (Opus 5)** — all code, this file, the README, and the first draft of WRITEUP.md (edited by me).

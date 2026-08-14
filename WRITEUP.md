@@ -10,7 +10,7 @@ Draft for Tom to edit. Every claim below is checkable against the repo or the li
 
 **What compounds.** Three feedback loops are built into this slice, deliberately:
 
-1. **Routing corrections.** Every ticket stores what the model proposed and what the rules decided; every human reassignment stores what the right team actually was. That is a labelled dataset accumulating as a by-product of normal work. The keyword table is the floor; the dataset is what replaces it.
+1. **Routing corrections — and the loop is closed in this build.** Every ticket stores what the model proposed and what the rules decided; every human reassignment stores what the right team actually was. M7 turns that signal into behaviour under a hard precedence: hand rules always win, learned rules fill only the gap where no hand rule matched, the model's suggestion sits below both. A correction in the gap teaches a rule; a correction against a learned rule retires it; a correction against a hand rule is recorded as evidence for a human to edit the table — and can never change behaviour by itself. Proof test 10 asserts the isolation property rather than asserting *about* it: a learned rule cannot move anything a hand rule claims. This is the autonomy mechanism in miniature — the adaptive part earns exactly the territory the deterministic part has explicitly ceded, and nothing more.
 2. **Resolution rate as the OMTM.** A conversation is resolved iff the user got what they needed with no negative signal (👎, reassignment, rephrase-loop, denied-then-abandoned). It is measurable per conversation from day one, and it is the number the whole system exists to move.
 3. **The audit trail as demand signal.** Denials are not just enforcement — they are a log of what users asked for and couldn't get. That is the roadmap for the next tool and the next principal type, written by the users themselves.
 
@@ -53,4 +53,4 @@ Everything — see BUILDLOG.md for the specific record. Summary: the spec was wr
 
 ---
 
-*Evidence index: `npm run prove` (the 9-test proof) · demo chip 6 (live injection) · Metrics tab (routing agreement, reassignment rate, resolution rate) · `POST /api/simulate` (the eval harness) · `lib/core` imports (transport-independence claim).*
+*Evidence index: `npm run prove` (the 10-test proof, incl. the learning-isolation assertion) · demo chip 6 (live injection) · the "teach the router" chip pair (the learning loop, live) · Metrics tab (routing agreement, reassignment rate, resolution rate) · `POST /api/simulate` (the eval harness) · `lib/core` imports (transport-independence claim).*
