@@ -23,6 +23,7 @@ function timeOf(ts: string): string {
  *   - drag a card between COLUMNS  → workflow status (To Do → … → Done)
  *   - change the TEAM on a card    → routing correction — the router learns
  *   - COMMENT on a card            → a note; the creator hears about it
+ * All three are internal-staff affordances; everyone else gets view access.
  */
 export function TicketBoard({
   principal,
@@ -48,6 +49,10 @@ export function TicketBoard({
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
+  // Dentists get view access only: corrections and workflow moves are the
+  // account manager's job. (Patients never reach this board at all.)
+  const readOnly = principal.type !== "internal_staff";
+
   const commentsFor = (ticketId: string) => comments.filter((c) => c.ticketId === ticketId);
 
   const submitComment = (ticketId: string) => {
@@ -62,8 +67,9 @@ export function TicketBoard({
       <div className="flex items-baseline gap-2 px-6 pb-1 pt-4">
         <h2 className="text-[13px] font-semibold">{principal.name}&rsquo;s tickets</h2>
         <span className="text-[11px] text-[var(--muted)]">
-          drag a card to update its status · change a card&rsquo;s team to correct routing (the
-          router learns from it) · comments notify whoever raised the ticket
+          {readOnly
+            ? "view only — routing corrections and status moves are made by your account manager"
+            : "drag a card to update its status · change a card's team to correct routing (the router learns from it) · comments notify whoever raised the ticket"}
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-6 pb-5 pt-2">
@@ -73,11 +79,13 @@ export function TicketBoard({
             <div
               key={col.key}
               onDragOver={(e) => {
+                if (readOnly) return;
                 e.preventDefault();
                 setOverCol(col.key);
               }}
               onDragLeave={() => setOverCol((c) => (c === col.key ? null : c))}
               onDrop={(e) => {
+                if (readOnly) return;
                 e.preventDefault();
                 setOverCol(null);
                 if (dragId) onStatusChange(dragId, col.key);
@@ -101,7 +109,7 @@ export function TicketBoard({
               <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2">
                 {cards.length === 0 && (
                   <p className="px-1 pt-1 text-[10.5px] text-stone-400">
-                    {overCol === col.key ? "Drop here" : "No tickets"}
+                    {!readOnly && overCol === col.key ? "Drop here" : "No tickets"}
                   </p>
                 )}
                 {cards.map((t) => {
@@ -109,15 +117,15 @@ export function TicketBoard({
                   return (
                     <div
                       key={t.id}
-                      draggable
-                      onDragStart={() => setDragId(t.id)}
+                      draggable={!readOnly}
+                      onDragStart={() => !readOnly && setDragId(t.id)}
                       onDragEnd={() => setDragId(null)}
                       ref={(el) => {
                         if (el && t.id === focusTicketId) {
                           el.scrollIntoView({ block: "nearest", behavior: "smooth" });
                         }
                       }}
-                      className={`fade-up cursor-grab rounded-lg border bg-white px-2.5 py-2 transition-shadow active:cursor-grabbing ${
+                      className={`fade-up rounded-lg border bg-white px-2.5 py-2 transition-shadow ${readOnly ? "" : "cursor-grab active:cursor-grabbing"} ${
                         t.id === focusTicketId
                           ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]"
                           : dragId === t.id
@@ -129,18 +137,26 @@ export function TicketBoard({
                         {t.subject}
                       </div>
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <select
-                          value={t.team}
-                          onChange={(e) => onReassign(t.id, e.target.value)}
-                          title="Correct the team — the router treats this as training signal"
-                          className={`appearance-none rounded-full border-0 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide transition hover:ring-2 hover:ring-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300 ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
-                        >
-                          {TEAMS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                        {readOnly ? (
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
+                          >
+                            {t.team}
+                          </span>
+                        ) : (
+                          <select
+                            value={t.team}
+                            onChange={(e) => onReassign(t.id, e.target.value)}
+                            title="Correct the team — the router treats this as training signal"
+                            className={`appearance-none rounded-full border-0 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide transition hover:ring-2 hover:ring-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300 ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
+                          >
+                            {TEAMS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <span
                           className={`rounded px-1 py-px text-[9px] font-medium uppercase tracking-wide ${
                             t.routedVia === "learned"
@@ -159,16 +175,18 @@ export function TicketBoard({
                       </div>
 
                       <div className="mt-1.5 flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setDraft("");
-                            setOpenComments(openComments === t.id ? null : t.id);
-                          }}
-                          className="text-[10px] font-medium text-stone-500 transition hover:text-[var(--accent)]"
-                        >
-                          💬 {tComments.length || ""}{" "}
-                          {openComments === t.id ? "hide" : tComments.length ? "comments" : "comment"}
-                        </button>
+                        {(!readOnly || tComments.length > 0) && (
+                          <button
+                            onClick={() => {
+                              setDraft("");
+                              setOpenComments(openComments === t.id ? null : t.id);
+                            }}
+                            className="text-[10px] font-medium text-stone-500 transition hover:text-[var(--accent)]"
+                          >
+                            💬 {tComments.length || ""}{" "}
+                            {openComments === t.id ? "hide" : tComments.length ? "comments" : "comment"}
+                          </button>
+                        )}
                         <span className="ml-auto text-[9.5px] tabular-nums text-[var(--muted)]">
                           {timeOf(t.createdAt)}
                         </span>
@@ -183,6 +201,7 @@ export function TicketBoard({
                               <div className="text-stone-700">{c.text}</div>
                             </div>
                           ))}
+                          {!readOnly && (
                           <form
                             onSubmit={(e) => {
                               e.preventDefault();
@@ -204,6 +223,7 @@ export function TicketBoard({
                               Post
                             </button>
                           </form>
+                          )}
                         </div>
                       )}
 

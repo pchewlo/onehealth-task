@@ -42,6 +42,7 @@ export default function Home() {
   const [correctionNote, setCorrectionNote] = useState<CorrectionNote | null>(null);
   const [focusTicketId, setFocusTicketId] = useState<string | null>(null);
   const idleAskTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [devAskNote, setDevAskNote] = useState<string | null>(null);
   const askedConvs = useRef<Set<string>>(new Set());
   const seenNotifs = useRef<Set<string>>(new Set());
 
@@ -81,7 +82,9 @@ export default function Home() {
     } catch {}
   };
 
+  const conversationsRef = useRef(conversations);
   useEffect(() => {
+    conversationsRef.current = conversations;
     if (!restored.current) return;
     try {
       localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
@@ -278,29 +281,30 @@ export default function Home() {
   };
 
   const injectResolveAsk = useCallback(
-    (pid: string) => {
+    (pid: string, opts?: { force?: boolean }): string | null => {
       const conv = convId(pid);
-      if (askedConvs.current.has(conv)) return;
-      setConversations((c) => {
-        const thread = c[pid] ?? [];
-        const last = [...thread].reverse().find((m) => m.role === "assistant" && !m.notice);
-        // Nothing to close, already asked, or the user already rated it.
-        if (!last || last.error || last.feedback || thread.some((m) => m.resolveAsk)) return c;
-        askedConvs.current.add(conv);
-        return {
-          ...c,
-          [pid]: [
-            ...thread,
-            {
-              id: `ask_${Date.now()}`,
-              role: "assistant",
-              content: "Did this resolve your query?",
-              ts: new Date().toISOString(),
-              resolveAsk: true,
-            },
-          ],
-        };
-      });
+      const thread = conversationsRef.current[pid] ?? [];
+      const last = [...thread].reverse().find((m) => m.role === "assistant" && !m.notice);
+      if (!last || last.error) return "Nothing to close yet — send a message and get a reply first.";
+      if (thread.some((m) => m.resolveAsk && !m.resolveAnswer)) return "The prompt is already showing.";
+      if (askedConvs.current.has(conv)) return "Already asked for this conversation.";
+      // Organic timer defers to explicit 👍/👎; the dev trigger overrides it.
+      if (last.feedback && !opts?.force) return "Feedback already given on the last reply.";
+      askedConvs.current.add(conv);
+      setConversations((c) => ({
+        ...c,
+        [pid]: [
+          ...(c[pid] ?? []),
+          {
+            id: `ask_${Date.now()}`,
+            role: "assistant",
+            content: "Did this resolve your query?",
+            ts: new Date().toISOString(),
+            resolveAsk: true,
+          },
+        ],
+      }));
+      return null;
     },
     [],
   );
@@ -362,6 +366,14 @@ export default function Home() {
     setTimeout(() => setFocusTicketId((f) => (f === ticketId ? null : f)), 6000);
   };
 
+  // A 404 on a ticket action means the server no longer has it (state was
+  // reset or a cold start predates persistence) — the card is a ghost from
+  // this tab's merge cache. Actions on it can never succeed, so drop it.
+  const dropGhost = (ticketId: string) => {
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    setComments((prev) => prev.filter((c) => c.ticketId !== ticketId));
+  };
+
   const reassign = async (ticketId: string, team: string) => {
     const r = await fetch("/api/tickets", {
       method: "POST",
@@ -369,6 +381,7 @@ export default function Home() {
       body: JSON.stringify({ principalId: activeId, ticketId, team }),
     });
     const j = await r.json();
+    if (r.status === 404) dropGhost(ticketId);
     if (r.ok) {
       const note: CorrectionNote = j.learned
         ? {
@@ -446,6 +459,7 @@ export default function Home() {
       body: JSON.stringify({ principalId: activeId, ticketId, status }),
     });
     const j = await r.json();
+    if (r.status === 404) dropGhost(ticketId);
     if (r.ok) {
       mergeTickets(j.tickets, j.learnedRules, j.comments);
       ingestNotifications(j.notifications);
@@ -460,6 +474,7 @@ export default function Home() {
       body: JSON.stringify({ principalId: activeId, ticketId, comment: text }),
     });
     const j = await r.json();
+    if (r.status === 404) dropGhost(ticketId);
     if (r.ok) {
       mergeTickets(j.tickets, j.learnedRules, j.comments);
       ingestNotifications(j.notifications);
@@ -513,8 +528,11 @@ export default function Home() {
         resetting={resetting}
         onDevAskResolve={() => {
           cancelIdleAsk();
-          injectResolveAsk(activeId);
+          const blocked = injectResolveAsk(activeId, { force: true });
+          setDevAskNote(blocked);
+          if (blocked) setTimeout(() => setDevAskNote(null), 4000);
         }}
+        devAskNote={devAskNote}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">

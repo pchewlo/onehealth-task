@@ -71,6 +71,7 @@ export function PrincipalSwitcher({
   onReset,
   resetting,
   onDevAskResolve,
+  devAskNote,
 }: {
   principals: UiPrincipal[];
   activeId: string;
@@ -78,6 +79,7 @@ export function PrincipalSwitcher({
   onReset: () => void;
   resetting: boolean;
   onDevAskResolve: () => void;
+  devAskNote: string | null;
 }) {
   const staff = principals.filter((p) => p.type === "internal_staff");
   const dentists = principals.filter((p) => p.type === "dentist");
@@ -160,6 +162,9 @@ export function PrincipalSwitcher({
         >
           ⚙ Trigger &ldquo;did this resolve?&rdquo;
         </button>
+        {devAskNote && (
+          <p className="fade-up text-[10.5px] leading-snug text-amber-700">{devAskNote}</p>
+        )}
       </div>
     </aside>
   );
