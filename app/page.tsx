@@ -546,12 +546,7 @@ export default function Home() {
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-4 border-b border-[var(--line)] bg-white px-6 py-3">
-          <div>
-            <h1 className="text-[14px] font-semibold leading-tight">Governed Agent Layer</h1>
-            <p className="text-[11px] text-[var(--muted)]">
-              The model proposes · the server decides
-            </p>
-          </div>
+          <h1 className="text-[14px] font-semibold leading-tight">Governed Agent Layer</h1>
           {tab === "chat" && messages.length > 0 && (
             <button
               onClick={clearChat}
