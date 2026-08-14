@@ -14,12 +14,42 @@ function stamp(ts?: string): string | null {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * Machine tokens the model echoes from tool results, rendered as badges
+ * instead of raw snake_case. Only unambiguous tokens are badged — words like
+ * "refinement" or "complete" also occur as ordinary prose, so they stay text.
+ */
+const TOKEN_BADGES: Record<string, { label: string; cls: string }> = {
+  in_treatment: { label: "In treatment", cls: "bg-teal-100 text-teal-800" },
+  aligners_in_production: { label: "Aligners in production", cls: "bg-sky-100 text-sky-800" },
+  treatment_planning: { label: "Treatment planning", cls: "bg-violet-100 text-violet-800" },
+  SOLO: { label: "SOLO", cls: "bg-stone-200 text-stone-700" },
+  DUO: { label: "DUO", cls: "bg-stone-200 text-stone-700" },
+};
+
+const TOKEN_RE = /\b(in_treatment|aligners_in_production|treatment_planning|SOLO|DUO)\b/g;
+
+function renderPlain(text: string, keyBase: string): React.ReactNode[] {
+  return text.split(TOKEN_RE).map((seg, i) => {
+    const badge = TOKEN_BADGES[seg];
+    if (!badge) return seg;
+    return (
+      <span
+        key={`${keyBase}_${i}`}
+        className={`mx-0.5 inline-block rounded-full px-2 py-px align-baseline text-[11px] font-semibold ${badge.cls}`}
+      >
+        {badge.label}
+      </span>
+    );
+  });
+}
+
 /** Markdown-lite: bold, inline code and pipe tables — the model emits nothing
  * fancier here. Newlines are preserved by the surrounding whitespace-pre-wrap. */
 function mdLite(text: string): React.ReactNode[] {
   return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((p, i) => {
     if (p.startsWith("**") && p.endsWith("**")) {
-      return <strong key={i}>{p.slice(2, -2)}</strong>;
+      return <strong key={i}>{renderPlain(p.slice(2, -2), `b${i}`)}</strong>;
     }
     if (p.startsWith("`") && p.endsWith("`")) {
       return (
@@ -28,7 +58,7 @@ function mdLite(text: string): React.ReactNode[] {
         </code>
       );
     }
-    return p;
+    return <span key={i}>{renderPlain(p, `p${i}`)}</span>;
   });
 }
 
