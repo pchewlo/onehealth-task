@@ -1,0 +1,255 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  CHIPS,
+  TEAM_COLORS,
+  type UiMessage,
+  type UiPrincipal,
+  type UiToolCall,
+} from "../lib/ui-types";
+
+function ToolChip({ c }: { c: UiToolCall }) {
+  const argsSummary = summariseArgs(c.args);
+  return (
+    <span
+      title={c.allowed ? undefined : `${c.errorCode}: ${c.reason ?? ""}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+        c.allowed
+          ? "border-green-200 bg-[var(--allow-soft)] text-[var(--allow)]"
+          : "border-red-200 bg-[var(--deny-soft)] text-[var(--deny)]"
+      }`}
+    >
+      <span>{c.allowed ? "✓" : "⛔"}</span>
+      <span className="font-mono">
+        {c.tool}
+        {argsSummary ? `(${argsSummary})` : "()"}
+      </span>
+    </span>
+  );
+}
+
+function summariseArgs(args: unknown): string {
+  if (!args || typeof args !== "object") return "";
+  const o = args as Record<string, unknown>;
+  const bits: string[] = [];
+  for (const k of ["patientId", "caseId", "query", "subject", "team_suggestion"]) {
+    if (typeof o[k] === "string") {
+      const v = o[k] as string;
+      bits.push(v.length > 24 ? `${v.slice(0, 24)}…` : v);
+    }
+  }
+  return bits.join(", ");
+}
+
+function ToolStrip({ calls }: { calls: UiToolCall[] }) {
+  const [open, setOpen] = useState(false);
+  if (!calls.length) return null;
+  const denies = calls.filter((c) => !c.allowed).length;
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-[11px] font-medium text-[var(--muted)] transition hover:text-stone-700"
+      >
+        {open ? "▾" : "▸"} {calls.length} tool call{calls.length === 1 ? "" : "s"}
+        {denies > 0 && <span className="text-[var(--deny)]"> · {denies} denied</span>}
+      </button>
+      {open && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {calls.map((c, i) => (
+            <ToolChip key={i} c={c} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Chat({
+  principal,
+  messages,
+  busy,
+  keyMissing,
+  onSend,
+  onFeedback,
+}: {
+  principal: UiPrincipal;
+  messages: UiMessage[];
+  busy: boolean;
+  keyMissing: boolean;
+  onSend: (text: string) => void;
+  onFeedback: (messageId: string, rating: "up" | "down") => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, busy]);
+
+  const chips = CHIPS[principal.id] ?? [];
+
+  const send = (text: string) => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setDraft("");
+    onSend(t);
+  };
+
+  return (
+    <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto flex max-w-[720px] flex-col gap-4">
+          {messages.length === 0 && (
+            <div className="mt-16 text-center">
+              <div className="text-[15px] font-medium text-stone-500">
+                Ask something as {principal.name}
+              </div>
+              <div className="mt-1 text-[12.5px] text-[var(--muted)]">
+                The assistant only sees what this user is allowed to see.
+              </div>
+            </div>
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className={`fade-up ${m.role === "user" ? "self-end" : "self-start"} max-w-[92%]`}>
+              {m.role === "user" ? (
+                <div className="rounded-2xl rounded-br-md bg-[var(--accent)] px-4 py-2.5 text-[13.5px] leading-relaxed text-white shadow-sm">
+                  {m.content}
+                </div>
+              ) : (
+                <div
+                  className={`rounded-2xl rounded-bl-md border px-4 py-3 text-[13.5px] leading-relaxed shadow-sm ${
+                    m.error
+                      ? "border-red-200 bg-[var(--deny-soft)] text-[var(--deny)]"
+                      : "border-[var(--line)] bg-white"
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap">{m.content}</div>
+
+                  {m.toolCalls?.some((c) => !c.allowed) && (
+                    <div className="mt-2.5 space-y-1">
+                      {m.toolCalls
+                        .filter((c) => !c.allowed)
+                        .map((c, i) => (
+                          <div
+                            key={i}
+                            className="rounded-lg border border-amber-200 bg-[var(--warn-soft)] px-2.5 py-1.5 text-[11.5px] text-[var(--warn)]"
+                          >
+                            ⛔ <span className="font-mono">{c.tool}({summariseArgs(c.args)})</span>{" "}
+                            — {c.errorCode === "OUT_OF_SCOPE" ? "out of scope" : c.errorCode}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {m.tickets?.map((t) => (
+                    <div
+                      key={t.id}
+                      className="mt-2.5 rounded-xl border border-[var(--line)] bg-stone-50 px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${TEAM_COLORS[t.team] ?? "bg-stone-200"}`}
+                        >
+                          {t.team}
+                        </span>
+                        <span className="text-[12.5px] font-medium">{t.subject}</span>
+                        <span className="ml-auto font-mono text-[10.5px] text-[var(--muted)]">
+                          {t.id}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
+                        {t.routingReason}
+                      </div>
+                    </div>
+                  ))}
+
+                  {m.toolCalls && <ToolStrip calls={m.toolCalls} />}
+
+                  {!m.error && (
+                    <div className="mt-2 flex gap-1.5">
+                      {(["up", "down"] as const).map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => onFeedback(m.id, r)}
+                          disabled={Boolean(m.feedback)}
+                          className={`rounded-md px-1.5 py-0.5 text-[13px] transition ${
+                            m.feedback === r
+                              ? "bg-stone-200"
+                              : m.feedback
+                                ? "opacity-25"
+                                : "opacity-40 hover:bg-stone-100 hover:opacity-100"
+                          }`}
+                          title={r === "up" ? "Helpful" : "Not helpful"}
+                        >
+                          {r === "up" ? "👍" : "👎"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {busy && (
+            <div className="fade-up flex items-center gap-1.5 self-start rounded-2xl rounded-bl-md border border-[var(--line)] bg-white px-4 py-3">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="thinking-dot h-1.5 w-1.5 rounded-full bg-stone-400" />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-[var(--line)] bg-white/70 px-6 py-4">
+        <div className="mx-auto max-w-[720px]">
+          {keyMissing && (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-[var(--warn-soft)] px-3 py-2 text-[12px] text-[var(--warn)]">
+              The Anthropic API key on the server has no credit — chat is disabled until it is
+              topped up. The proof script and audit trail still work.
+            </div>
+          )}
+          {chips.length > 0 && (
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {chips.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => send(c)}
+                  disabled={busy}
+                  className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11.5px] text-stone-600 transition hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-40"
+                >
+                  {c.length > 64 ? `${c.slice(0, 64)}…` : c}
+                </button>
+              ))}
+            </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              send(draft);
+            }}
+            className="flex gap-2"
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={`Message as ${principal.name}…`}
+              disabled={busy}
+              className="flex-1 rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-[13.5px] outline-none transition placeholder:text-stone-400 focus:border-[var(--accent)] disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={busy || !draft.trim()}
+              className="rounded-xl bg-[var(--accent)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

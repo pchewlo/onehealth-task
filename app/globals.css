@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f6f3;
+  --panel: #ffffff;
+  --ink: #1c1917;
+  --muted: #78716c;
+  --line: #e7e5e0;
+  --accent: #0d7377;
+  --accent-soft: #e0f2f1;
+  --deny: #b91c1c;
+  --deny-soft: #fef2f2;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --allow: #15803d;
+  --allow-soft: #f0fdf4;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "ss01";
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d3ce;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fadeUp 0.18s ease-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.thinking-dot {
+  animation: pulseDot 1.1s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.3s; }
