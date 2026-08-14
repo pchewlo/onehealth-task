@@ -45,6 +45,10 @@ export async function runAgent(input: {
   principalId: string;
   messages: ChatMessage[];
   conversationId: string;
+  /** Which surface the conversation arrives on. Channel shapes TONE and
+   * verbosity via the system prompt; it never changes what authorize()
+   * allows — scope is principal-based and channel-blind. */
+  channel?: "web" | "whatsapp";
 }): Promise<AgentResult> {
   // Principal resolution happens HERE, server-side, from the session identity.
   // In production this line reads a verified session cookie / JWT; the demo
@@ -70,6 +74,11 @@ export async function runAgent(input: {
           : ""
   }).`;
 
+  const channelNote =
+    input.channel === "whatsapp"
+      ? "\n\nThis conversation arrives over WhatsApp: reply in short plain text (no markdown, no tables, no headers). Share the user's own treatment status and simple guidance; for anything detailed or clinical, suggest they open the app or contact their practice."
+      : "";
+
   // Bridge MCP tool definitions → Anthropic tool definitions, mechanically.
   const { tools: mcpTools } = await mcp.listTools();
   const tools: Anthropic.Tool[] = mcpTools.map((t) => ({
@@ -93,7 +102,7 @@ export async function runAgent(input: {
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: SYSTEM_PROMPT + identity,
+      system: SYSTEM_PROMPT + identity + channelNote,
       tools,
       messages,
     });

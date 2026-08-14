@@ -410,15 +410,10 @@ export function readAudit(limit = 50): AuditEntry[] {
  * the calls made by the dentists they manage. Nobody sees a stranger's trail.
  */
 export function auditVisibleTo(p: Principal, limit = 60): AuditEntry[] {
+  // Same ownership predicate as tickets (inBookOf): self, plus — for staff —
+  // anyone in their managed book, patients resolved via their dentist.
   return state()
-    .audit.filter((e) => {
-      if (e.principalId === p.id) return true;
-      if (p.type === "internal_staff") {
-        const actor = getPrincipal(e.principalId);
-        return Boolean(actor?.dentistId && p.manages?.includes(actor.dentistId));
-      }
-      return false;
-    })
+    .audit.filter((e) => inBookOf(p, e.principalId))
     .slice(0, limit);
 }
 
