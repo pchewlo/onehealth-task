@@ -172,6 +172,22 @@ export interface KbRecord {
   body: string;
 }
 
+/**
+ * M10 — a booked appointment from the growth loop (reminder → link → slot).
+ * Demo-grade: fake slots, no calendar. Additive state only — nothing in the
+ * security layer knows bookings exist.
+ */
+export interface Booking {
+  id: string;
+  ts: string;
+  patientId: string;
+  patientName: string;
+  practice: string;
+  dentistId: string;
+  slot: string;
+  treatment: "check-up" | "whitening";
+}
+
 /* ---------- Metrics event stream (M5) ---------- */
 
 export type MetricEventType =

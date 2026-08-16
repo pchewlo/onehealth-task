@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./components/Chat";
+import { GrowthTab } from "./components/GrowthTab";
 import { MetricsTab } from "./components/MetricsTab";
 import { PrincipalSwitcher } from "./components/PrincipalSwitcher";
 import { AuditLog, LearnedRulesBlock, type CorrectionNote } from "./components/RightRail";
@@ -33,7 +34,7 @@ const TAB_KEY = "gal.tab.v1";
 export default function Home() {
   const [principals, setPrincipals] = useState<UiPrincipal[]>([]);
   const [activeId, setActiveId] = useState<string>("U_D1");
-  const [tab, setTab] = useState<"chat" | "tickets" | "metrics">("chat");
+  const [tab, setTab] = useState<"chat" | "tickets" | "metrics" | "growth">("chat");
   const [conversations, setConversations] = useState<Record<string, UiMessage[]>>({});
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -224,7 +225,7 @@ export default function Home() {
   const tabs = isPatient
     ? (["chat"] as const)
     : isStaff
-      ? (["chat", "tickets", "metrics"] as const)
+      ? (["chat", "tickets", "metrics", "growth"] as const)
       : (["chat", "tickets"] as const);
 
   // Sanitize restored state once principals arrive: an unknown saved id
@@ -595,6 +596,8 @@ export default function Home() {
             onStatusChange={changeStatus}
             onComment={addTicketComment}
           />
+        ) : tab === "growth" && isStaff && active ? (
+          <GrowthTab principal={active} />
         ) : tab === "metrics" && isStaff ? (
           <MetricsTab keyMissing={keyMissing} />
         ) : (

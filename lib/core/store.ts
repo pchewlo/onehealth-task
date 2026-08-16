@@ -9,6 +9,7 @@ import type {
   PatientRecord,
   Principal,
   Ticket,
+  Booking,
   TicketComment,
   TicketNotification,
   TicketStatus,
@@ -36,6 +37,7 @@ export interface MutableState {
   tickets: Ticket[];
   notifications: TicketNotification[];
   comments: TicketComment[];
+  bookings: Booking[];
   /** Tombstones so a retired learned rule stays retired across merges. */
   retiredRuleIds: string[];
   audit: AuditEntry[];
@@ -49,7 +51,7 @@ const g = globalThis as unknown as { __ohState?: MutableState };
 
 function state(): MutableState {
   if (!g.__ohState) {
-    g.__ohState = { epoch: 0, tickets: [], notifications: [], comments: [], audit: [], events: [], learnedRules: [], retiredRuleIds: [], seq: 0, backfilled: false };
+    g.__ohState = { epoch: 0, tickets: [], notifications: [], comments: [], bookings: [], audit: [], events: [], learnedRules: [], retiredRuleIds: [], seq: 0, backfilled: false };
   }
   return g.__ohState;
 }
@@ -71,6 +73,7 @@ function normalize(s: MutableState): MutableState {
   s.notifications ??= [];
   s.comments ??= [];
   s.retiredRuleIds ??= [];
+  s.bookings ??= [];
   for (const t of s.tickets ?? []) {
     if ((t.status as string) === "open" || !t.status) t.status = "todo";
     t.updatedAt ??= t.createdAt;
@@ -124,6 +127,7 @@ function mergeStates(local: MutableState, remote: MutableState): MutableState {
       (r) => !retiredRuleIds.includes(r.id),
     ),
     retiredRuleIds,
+    bookings: unionById(local.bookings, remote.bookings).sort((a, b) => b.ts.localeCompare(a.ts)),
     seq: Math.max(local.seq, remote.seq),
     backfilled: local.backfilled || remote.backfilled,
   };
@@ -377,6 +381,20 @@ export function commentsVisibleTo(p: Principal): TicketComment[] {
   return state().comments.filter((c) => visible.has(c.ticketId));
 }
 
+/* ---------------- Bookings (M10 growth demo) ---------------- */
+
+export function addBooking(b: Booking): void {
+  state().bookings.unshift(b);
+}
+
+/** Staff see bookings across their managed book; dentists their own practice. */
+export function bookingsVisibleTo(p: Principal): Booking[] {
+  const dentistIds = new Set(
+    p.type === "internal_staff" ? p.manages ?? [] : p.dentistId ? [p.dentistId] : [],
+  );
+  return state().bookings.filter((b) => dentistIds.has(b.dentistId));
+}
+
 /* ---------------- Learned rules (M7) ---------------- */
 
 export function addLearnedRule(r: LearnedRule): void {
@@ -442,6 +460,7 @@ export function reset(): void {
   s.tickets = [];
   s.notifications = [];
   s.comments = [];
+  s.bookings = [];
   s.audit = [];
   s.events = [];
   s.learnedRules = [];
