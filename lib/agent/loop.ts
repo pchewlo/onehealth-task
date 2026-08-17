@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { connectGovernedServer } from "../mcp/server";
 import { PRINCIPALS, appendEvent, getPrincipal, nextId, rawPatient } from "../core/store";
+import { makeBookingToken } from "../growth/token";
 
 /**
  * The agent loop. Orchestration only — no policy lives here.
@@ -82,9 +83,19 @@ export async function runAgent(input: {
           (u) => u.dentistId === rawPatient(principal.patientId!)?.dentistId,
         )?.practice
       : undefined;
+  // Patient self-service links, scoped by the same signed token the growth
+  // loop uses — the model can hand them out but cannot mint one for anyone
+  // else: the token is generated server-side for THIS principal only.
+  const base = process.env.PUBLIC_BASE_URL ?? "https://onehealth-task.vercel.app";
+  const patientLinks = principal.patientId
+    ? (() => {
+        const t = makeBookingToken(principal.patientId!);
+        return `\n\nSelf-service links for this patient (share when relevant, never for anyone else):\n- Whitening preview (upload a photo, see an indicative result, book a session): ${base}/whitening?t=${t}\n- Book a 6-month check-up: ${base}/book/${t}\nIf the user asks about whitening, cosmetic options, or booking a visit, share the matching link with one short sentence of context. Mention the whitening preview is indicative only.`;
+      })()
+    : "";
   const channelNote =
     input.channel === "whatsapp"
-      ? `\n\nThis conversation arrives over WhatsApp: reply in short plain text (no markdown tables or headers; *single asterisks* for bold are fine). You are messaging as the assistant for ${patientPractice ?? "the patient's dental practice"} — open your first reply in a conversation naturally as that practice's assistant. Share the user's own treatment status and simple guidance; for anything detailed or clinical, suggest they open the app or contact the practice.`
+      ? `\n\nThis conversation arrives over WhatsApp: reply in short plain text (no markdown tables or headers; *single asterisks* for bold are fine). You are messaging as the assistant for ${patientPractice ?? "the patient's dental practice"} — open your first reply in a conversation naturally as that practice's assistant. Share the user's own treatment status and simple guidance; for anything detailed or clinical, suggest they open the app or contact the practice.${patientLinks}`
       : "";
 
   // Bridge MCP tool definitions → Anthropic tool definitions, mechanically.
