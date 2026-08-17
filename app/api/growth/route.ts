@@ -65,7 +65,9 @@ export async function POST(req: NextRequest) {
   const link = `${origin}/book/${token}`;
 
   const firstName = patient.name.split(" ")[0];
-  const message = `Hi ${firstName}, it's been 6 months since your last visit — time for a check-up. Book here: ${link}`;
+  const practice =
+    PRINCIPALS.find((u) => u.dentistId === patient.dentistId)?.practice ?? "your practice";
+  const message = `*${practice}*\nHi ${firstName}, it's been 6 months since your last visit — time for a check-up. Book here: ${link}`;
 
   // Patient record → their login principal → mapped phone (demo: Tom's).
   const patientPrincipal = PRINCIPALS.find((u) => u.patientId === patient.id);

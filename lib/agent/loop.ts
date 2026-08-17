@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { connectGovernedServer } from "../mcp/server";
-import { appendEvent, getPrincipal, nextId } from "../core/store";
+import { PRINCIPALS, appendEvent, getPrincipal, nextId, rawPatient } from "../core/store";
 
 /**
  * The agent loop. Orchestration only — no policy lives here.
@@ -74,9 +74,17 @@ export async function runAgent(input: {
           : ""
   }).`;
 
+  // Over WhatsApp the sandbox header says "Twilio" — so the voice does the
+  // branding instead: the assistant speaks as the patient's own practice.
+  const patientPractice =
+    principal.patientId
+      ? PRINCIPALS.find(
+          (u) => u.dentistId === rawPatient(principal.patientId!)?.dentistId,
+        )?.practice
+      : undefined;
   const channelNote =
     input.channel === "whatsapp"
-      ? "\n\nThis conversation arrives over WhatsApp: reply in short plain text (no markdown, no tables, no headers). Share the user's own treatment status and simple guidance; for anything detailed or clinical, suggest they open the app or contact their practice."
+      ? `\n\nThis conversation arrives over WhatsApp: reply in short plain text (no markdown tables or headers; *single asterisks* for bold are fine). You are messaging as the assistant for ${patientPractice ?? "the patient's dental practice"} — open your first reply in a conversation naturally as that practice's assistant. Share the user's own treatment status and simple guidance; for anything detailed or clinical, suggest they open the app or contact the practice.`
       : "";
 
   // Bridge MCP tool definitions → Anthropic tool definitions, mechanically.
