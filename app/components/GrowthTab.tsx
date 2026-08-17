@@ -52,13 +52,13 @@ export function GrowthTab({ principal }: { principal: UiPrincipal }) {
     return () => clearInterval(t);
   }, [refresh]);
 
-  const remind = async (patientId: string) => {
-    setSending(patientId);
+  const remind = async (patientId: string, action: "checkup" | "whitening" = "checkup") => {
+    setSending(patientId + action);
     try {
       const r = await fetch("/api/growth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ principalId: principal.id, patientId }),
+        body: JSON.stringify({ principalId: principal.id, patientId, action }),
       });
       const j = await r.json();
       if (r.ok) setResults((m) => ({ ...m, [patientId]: { patientId, ...j } }));
@@ -79,7 +79,7 @@ export function GrowthTab({ principal }: { principal: UiPrincipal }) {
         </div>
 
         <div className="rounded-lg border border-[var(--line)] bg-white">
-          <div className="label px-4 pb-1 pt-3">6-month check-up reminders</div>
+          <div className="label px-4 pb-1 pt-3">Outreach — check-up reminders · whitening offers</div>
           {patients.map((p) => {
             const res = results[p.id];
             return (
@@ -92,13 +92,22 @@ export function GrowthTab({ principal }: { principal: UiPrincipal }) {
                       no mapped phone
                     </span>
                   )}
-                  <button
-                    onClick={() => remind(p.id)}
-                    disabled={sending === p.id}
-                    className="ml-auto rounded-md bg-[var(--accent)] px-3 py-1.5 text-[11.5px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {sending === p.id ? "Sending…" : "Send check-up reminder"}
-                  </button>
+                  <div className="ml-auto flex gap-1.5">
+                    <button
+                      onClick={() => remind(p.id, "whitening")}
+                      disabled={sending === p.id + "whitening"}
+                      className="rounded-md border border-[var(--accent)] bg-white px-3 py-1.5 text-[11.5px] font-semibold text-[var(--accent-ink)] transition hover:bg-[var(--accent-soft)] disabled:opacity-50"
+                    >
+                      {sending === p.id + "whitening" ? "Sending…" : "Whitening offer"}
+                    </button>
+                    <button
+                      onClick={() => remind(p.id, "checkup")}
+                      disabled={sending === p.id + "checkup"}
+                      className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-[11.5px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {sending === p.id + "checkup" ? "Sending…" : "Check-up reminder"}
+                    </button>
+                  </div>
                 </div>
                 {res && (
                   <div className="fade-up mt-1.5 text-[11px] leading-relaxed text-[var(--ink-2)]">

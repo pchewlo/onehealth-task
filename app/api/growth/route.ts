@@ -49,7 +49,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   await ensureHydrated({ force: true });
-  const body = (await req.json()) as { principalId?: string; patientId?: string };
+  const body = (await req.json()) as {
+    principalId?: string;
+    patientId?: string;
+    action?: "checkup" | "whitening";
+  };
   const staff = staffOnly(body.principalId ?? null);
   if (!staff) return NextResponse.json({ error: "staff only" }, { status: 403 });
 
@@ -67,7 +71,10 @@ export async function POST(req: NextRequest) {
   const firstName = patient.name.split(" ")[0];
   const practice =
     PRINCIPALS.find((u) => u.dentistId === patient.dentistId)?.practice ?? "your practice";
-  const message = `*${practice}*\nHi ${firstName}, it's been 6 months since your last visit — time for a check-up. Book here: ${link}`;
+  const whitening = body.action === "whitening";
+  const message = whitening
+    ? `*${practice}*\nHi ${firstName}, if you've been considering teeth whitening — we're running an offer at the moment. Upload a quick photo of your teeth and see what you could look like: ${origin}/whitening?t=${token}`
+    : `*${practice}*\nHi ${firstName}, it's been 6 months since your last visit — time for a check-up. Book here: ${link}`;
 
   // Patient record → their login principal → mapped phone (demo: Tom's).
   const patientPrincipal = PRINCIPALS.find((u) => u.patientId === patient.id);
@@ -84,5 +91,11 @@ export async function POST(req: NextRequest) {
   }
 
   await persistNow();
-  return NextResponse.json({ ok: true, sent, sendError, link, message });
+  return NextResponse.json({
+    ok: true,
+    sent,
+    sendError,
+    link: whitening ? `${origin}/whitening?t=${token}` : link,
+    message,
+  });
 }

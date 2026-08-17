@@ -13,20 +13,6 @@ import { useSearchParams } from "next/navigation";
  * doorway governs.
  */
 
-function Smile({ shade }: { shade: string }) {
-  const teeth = [0, 1, 2, 3, 4, 5];
-  return (
-    <svg viewBox="0 0 160 90" className="w-full">
-      <rect x="0" y="0" width="160" height="90" rx="10" fill="var(--surface-2)" />
-      <path d="M20 30 Q80 4 140 30 Q80 96 20 30Z" fill="#8c5a5e" />
-      <path d="M24 32 Q80 12 136 32 Q80 84 24 32Z" fill="#6d4348" />
-      {teeth.map((i) => (
-        <rect key={i} x={32 + i * 16.5} y={30 - (i === 0 || i === 5 ? 0 : 3)} width="14" height={i === 2 || i === 3 ? 24 : 19} rx="4" fill={shade} />
-      ))}
-    </svg>
-  );
-}
-
 function WhiteningInner() {
   const params = useSearchParams();
   const token = params.get("t");
@@ -89,11 +75,18 @@ function WhiteningInner() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="label mb-1.5">Now</div>
-              <Smile shade="#e8dcbf" />
+              {photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photo} alt="Your photo" className="w-full rounded-lg border border-[var(--line)]" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/whitening-before.jpg" alt="Before" className="w-full rounded-lg border border-[var(--line)]" />
+              )}
             </div>
             <div>
               <div className="label mb-1.5 !text-[var(--accent-ink)]">After 3 sessions</div>
-              <Smile shade="#faf7ef" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/whitening-after.jpg" alt="After" className="w-full rounded-lg border border-[var(--accent)]/40" />
             </div>
           </div>
           <p className="rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-[10.5px] leading-relaxed text-[var(--ink-2)]">
