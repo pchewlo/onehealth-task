@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/loop";
 import { phoneToPrincipal } from "@/lib/channels/whatsapp-map";
+import { makeBookingToken } from "@/lib/growth/token";
 import { appendAudit, ensureHydrated, getPrincipal, nextId, persistNow } from "@/lib/core/store";
 
 export const maxDuration = 60;
@@ -16,13 +17,14 @@ export const maxDuration = 60;
  * validation — both named in the README hardening list.
  */
 
-function twiml(message: string): NextResponse {
+function twiml(message: string, mediaUrl?: string): NextResponse {
   const escaped = message
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+  const media = mediaUrl ? `<Media>${mediaUrl}</Media>` : "";
   return new NextResponse(
-    `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escaped}</Message></Response>`,
+    `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escaped}</Body>${media}</Message></Response>`,
     { headers: { "Content-Type": "text/xml" } },
   );
 }
@@ -65,6 +67,21 @@ export async function POST(req: NextRequest) {
       await persistNow();
       return twiml(
         "This number isn't registered with the 01Health assistant. Please contact your practice to get set up.",
+      );
+    }
+
+    // A photo in the chat = the whitening preview, right in the thread. The
+    // "analysis" is the canned pair (demo-honest: live this calls an image
+    // model); the reply carries the after-image as media plus the patient's
+    // own signed booking link.
+    const numMedia = Number(form.get("NumMedia") ?? 0);
+    const mediaType = String(form.get("MediaContentType0") ?? "");
+    if (numMedia > 0 && mediaType.startsWith("image/") && principal.patientId) {
+      const base = process.env.PUBLIC_BASE_URL ?? "https://onehealth-task.vercel.app";
+      const token = makeBookingToken(principal.patientId);
+      return twiml(
+        `Thanks — here's an indicative preview of what around 3 whitening sessions could achieve. Individual results vary; it's not a clinical guarantee.\n\nLike what you see? Book a session: ${base}/book/${token}?type=whitening`,
+        `${base}/whitening-after.jpg`,
       );
     }
 
