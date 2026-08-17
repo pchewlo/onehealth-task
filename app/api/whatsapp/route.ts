@@ -39,8 +39,11 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const from = String(form.get("From") ?? "");
     const body = String(form.get("Body") ?? "").trim();
+    const numMedia = Number(form.get("NumMedia") ?? 0);
 
-    if (!from || !body) return twiml("Sorry — empty message.");
+    // A photo may arrive with no caption — empty body is only an error when
+    // there's no media either.
+    if (!from || (!body && numMedia === 0)) return twiml("Sorry — empty message.");
 
     await ensureHydrated({ force: true });
 
@@ -74,7 +77,6 @@ export async function POST(req: NextRequest) {
     // "analysis" is the canned pair (demo-honest: live this calls an image
     // model); the reply carries the after-image as media plus the patient's
     // own signed booking link.
-    const numMedia = Number(form.get("NumMedia") ?? 0);
     const mediaType = String(form.get("MediaContentType0") ?? "");
     if (numMedia > 0 && mediaType.startsWith("image/") && principal.patientId) {
       const base = process.env.PUBLIC_BASE_URL ?? "https://onehealth-task.vercel.app";
